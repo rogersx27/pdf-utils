@@ -29,7 +29,7 @@ class CardInfo:
     """Información de la tarjeta de crédito."""
 
     titular: str
-    numero_tarjeta: str  # Enmascarado: ************1325
+    numero_tarjeta: str  # Enmascarado: ************8989
     direccion: str
     ciudad: str
     departamento: str
@@ -385,7 +385,7 @@ class CreditCardExtractor:
         if titular_match:
             titular = titular_match.group(1).strip()
 
-        # Número de tarjeta: TARJETA: ************1325
+        # Número de tarjeta: TARJETA: ************8989
         numero_tarjeta = ""
         tarjeta_match = re.search(r"TARJETA:\s*(\*+\d+)", text)
         if tarjeta_match:
