@@ -62,9 +62,9 @@ def main():
                 # Reemplazar original con el desbloqueado
                 dest_path.unlink()
                 temp_path.rename(dest_path)
-                print(f"  [2] Contraseña removida")
+                print("  [2] Contraseña removida")
             else:
-                print(f"  [2] No está encriptado, saltando")
+                print("  [2] No está encriptado, saltando")
 
             success_count += 1
 
