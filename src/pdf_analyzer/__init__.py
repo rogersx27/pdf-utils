@@ -7,15 +7,16 @@ Módulos:
     - utils: Utilidades comunes
 """
 
-from pdf_analyzer.reader import PDFReader, list_pdfs, extract_text
-from pdf_analyzer.analyzer import PDFAnalyzer
-from pdf_analyzer.utils import get_data_path
+from .reader import PDFReader, list_pdfs, extract_text
+from .analyzer import PDFAnalyzer
+from .utils import get_data_path, parse_filename
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 __all__ = [
     "PDFReader",
     "PDFAnalyzer",
     "list_pdfs",
     "extract_text",
     "get_data_path",
+    "parse_filename",
 ]
