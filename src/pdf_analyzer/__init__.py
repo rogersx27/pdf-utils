@@ -40,109 +40,36 @@ from .file_manager import (
     get_file_info,
 )
 
-# Utils
-from .utils import get_data_path, parse_filename
+# Utils - Funciones de utilidad y conveniencia
+from .utils import (
+    # Utilidades generales
+    get_data_path,
+    parse_filename,
+    ensure_directory,
+    get_project_root,
+    # Funciones de conveniencia para PDFs
+    list_pdfs,
+    extract_text,
+    extract_tables,
+    get_metadata,
+    get_page_count,
+    is_encrypted,
+    remove_password,
+    add_password,
+    remove_password_batch,
+    add_password_batch,
+    analyze,
+    search_in_pdf,
+    compare_pdfs,
+)
 
 # =============================================================================
-# COMPATIBILIDAD HACIA ATRÁS
-# Estos aliases mantienen compatibilidad con el código existente
+# ALIASES DE COMPATIBILIDAD
 # =============================================================================
 
-# Alias para PDFReader (ahora es ReaderService)
 PDFReader = ReaderService
-
-# Alias para PDFAnalyzer (ahora es AnalyzerService)
 PDFAnalyzer = AnalyzerService
-
-# Alias para PDFSecurity (ahora es SecurityService)
 PDFSecurity = SecurityService
-
-
-def list_pdfs(directory):
-    """
-    Lista todos los PDFs en un directorio.
-
-    Función de compatibilidad - usa LocalPDFRepository internamente.
-    """
-    from pathlib import Path
-    return sorted(Path(directory).glob("*.pdf"))
-
-
-def extract_text(pdf_path, password=None):
-    """
-    Extrae texto de un PDF.
-
-    Función de compatibilidad - usa ReaderService internamente.
-    """
-    reader = ReaderService(password)
-    return reader.read_text(pdf_path)
-
-
-def is_encrypted(pdf_path):
-    """
-    Verifica si un PDF está encriptado.
-
-    Función de compatibilidad - usa SecurityService internamente.
-    """
-    security = SecurityService()
-    return security.is_encrypted(pdf_path)
-
-
-def remove_password(pdf_path, output_path=None, password=None):
-    """
-    Quita contraseña de un PDF.
-
-    Función de compatibilidad - usa SecurityService internamente.
-    """
-    security = SecurityService(password)
-    return security.remove_password(pdf_path, output_path)
-
-
-def add_password(pdf_path, output_path=None, user_password=None, owner_password=None):
-    """
-    Agrega contraseña a un PDF.
-
-    Función de compatibilidad - usa SecurityService internamente.
-    """
-    security = SecurityService()
-    return security.add_password(pdf_path, output_path, user_password, owner_password)
-
-
-def remove_password_batch(input_dir, output_dir=None, password=None):
-    """
-    Quita contraseña de múltiples PDFs.
-
-    Función de compatibilidad.
-    """
-    from pathlib import Path
-    docs = list(Path(input_dir).glob("*.pdf"))
-    security = SecurityService(password)
-    return security.batch_remove_password(docs, output_dir)
-
-
-def add_password_batch(input_dir, output_dir=None, user_password=None, owner_password=None):
-    """
-    Agrega contraseña a múltiples PDFs.
-
-    Función de compatibilidad.
-    """
-    from pathlib import Path
-    results = []
-    docs = list(Path(input_dir).glob("*.pdf"))
-    security = SecurityService()
-
-    for doc in docs:
-        try:
-            if output_dir:
-                out = Path(output_dir) / doc.name
-            else:
-                out = None
-            result = security.add_password(doc, out, user_password, owner_password)
-            results.append({"input": doc.name, "success": True, "output": str(result)})
-        except Exception as e:
-            results.append({"input": doc.name, "success": False, "error": str(e)})
-
-    return results
 
 
 __version__ = "1.0.0"
@@ -171,16 +98,25 @@ __all__ = [
     "get_file_info",
     # Utils
     "get_data_path",
+    "get_project_root",
+    "ensure_directory",
     "parse_filename",
-    # Compatibilidad hacia atrás
-    "PDFReader",
-    "PDFAnalyzer",
-    "PDFSecurity",
+    # Funciones de conveniencia
     "list_pdfs",
     "extract_text",
+    "extract_tables",
+    "get_metadata",
+    "get_page_count",
     "is_encrypted",
     "remove_password",
     "add_password",
     "remove_password_batch",
     "add_password_batch",
+    "analyze",
+    "search_in_pdf",
+    "compare_pdfs",
+    # Aliases de compatibilidad
+    "PDFReader",
+    "PDFAnalyzer",
+    "PDFSecurity",
 ]
