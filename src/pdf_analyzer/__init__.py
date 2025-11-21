@@ -24,7 +24,30 @@ from .models import PDFDocument, PDFDocumentInfo
 from .repositories import BaseRepository, LocalPDFRepository
 
 # Services
-from .services import ReaderService, AnalyzerService, SecurityService
+from .services import (
+    ReaderService,
+    AnalyzerService,
+    SecurityService,
+    ExtractorService,
+    TableInfo,
+    Section,
+    # Savings Account Extractor
+    SavingsAccountExtractor,
+    SavingsAccountStatement,
+    AccountInfo,
+    FinancialSummary,
+    Transaction,
+    # Credit Card Extractor
+    CreditCardExtractor,
+    CreditCardStatement,
+    CreditCardTransaction,
+    CardInfo,
+    CreditLimit,
+    InterestRates,
+    BalanceSummary,
+    MinimumPayment,
+    CurrencyStatement,
+)
 
 # File Manager
 from .file_manager import (
@@ -70,6 +93,7 @@ from .utils import (
 PDFReader = ReaderService
 PDFAnalyzer = AnalyzerService
 PDFSecurity = SecurityService
+PDFExtractor = ExtractorService
 
 
 __version__ = "1.0.0"
@@ -85,6 +109,25 @@ __all__ = [
     "ReaderService",
     "AnalyzerService",
     "SecurityService",
+    "ExtractorService",
+    "TableInfo",
+    "Section",
+    # Savings Account Extractor
+    "SavingsAccountExtractor",
+    "SavingsAccountStatement",
+    "AccountInfo",
+    "FinancialSummary",
+    "Transaction",
+    # Credit Card Extractor
+    "CreditCardExtractor",
+    "CreditCardStatement",
+    "CreditCardTransaction",
+    "CardInfo",
+    "CreditLimit",
+    "InterestRates",
+    "BalanceSummary",
+    "MinimumPayment",
+    "CurrencyStatement",
     # File Manager
     "FileOperations",
     "PDFOrganizer",
@@ -119,4 +162,5 @@ __all__ = [
     "PDFReader",
     "PDFAnalyzer",
     "PDFSecurity",
+    "PDFExtractor",
 ]
