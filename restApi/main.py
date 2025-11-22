@@ -17,7 +17,8 @@ from app.core.middleware import (
     RequestIDMiddleware
 )
 from app.core.docs_html import get_redoc_html, get_swagger_html
-from app.api.v1.router import api_router
+from app.api.v1.router import api_router as api_router_v1
+from app.api.v2.router import api_router as api_router_v2
 
 # Configure logging
 logging.basicConfig(
@@ -109,8 +110,9 @@ app.add_middleware(ErrorHandlerMiddleware)
 # Router Configuration
 # ============================================================================
 
-# Include API router
-app.include_router(api_router)
+# Include API routers
+app.include_router(api_router_v1)  # V1 - Original endpoints
+app.include_router(api_router_v2)  # V2 - Controller-based endpoints
 
 # ============================================================================
 # Custom Documentation Endpoints
@@ -147,7 +149,25 @@ async def root():
         "docs": "/docs",
         "redoc": "/redoc",
         "openapi": "/openapi.json",
-        "health": "/health"
+        "health": "/health",
+        "versions": {
+            "v1": {
+                "prefix": "/api/v1",
+                "description": "Original API endpoints",
+                "status": "stable"
+            },
+            "v2": {
+                "prefix": "/api/v2",
+                "description": "Controller-based API endpoints with improved architecture",
+                "status": "stable",
+                "features": [
+                    "MVC-inspired controller pattern",
+                    "Reusable business logic",
+                    "Enhanced error handling",
+                    "Batch operations support"
+                ]
+            }
+        }
     }
 
 
