@@ -84,10 +84,7 @@ class PDFAnalyzerService(BaseService):
             password: Default password for encrypted PDFs
         """
         self._init_password(password)
-        self.repository = LocalPDFRepository(
-            str(settings.data_dir),
-            password=self.password
-        )
+        self.repository = LocalPDFRepository(str(settings.data_dir))
 
     def list_pdfs(self, filters: Optional[dict] = None) -> list[PDFDocumentSchema]:
         """
@@ -323,7 +320,7 @@ class PDFAnalyzerService(BaseService):
                 fecha=document.info.fecha,
                 tipo=document.info.tipo,
                 numero=document.info.numero,
-                filename=document.info.filename
+                filename=document.filename  # filename is on PDFDocument, not PDFDocumentInfo
             ),
             exists=document.path.exists(),
             size_bytes=document.path.stat().st_size if document.path.exists() else None,
