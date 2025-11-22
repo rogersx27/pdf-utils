@@ -63,7 +63,7 @@ class PDFInfo(BaseSchema):
 # Example 1: Simple endpoint with logging
 # ============================================================================
 
-@router.get("/simple", response_model=MessageResponse)
+@router.get("/simple")
 @log_endpoint
 async def simple_example():
     """

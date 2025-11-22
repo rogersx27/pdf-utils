@@ -6,13 +6,12 @@ caching, validation, rate limiting, and more.
 """
 import functools
 import time
-from typing import Callable, Any, Optional
-from fastapi import Request, HTTPException, status
 import logging
+from typing import Callable, Any, Optional
+from fastapi import Request
 
 from app.core.exceptions import (
     BadRequestError,
-    UnauthorizedError,
     PDFPasswordError,
     NotFoundError
 )

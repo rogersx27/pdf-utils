@@ -8,6 +8,7 @@ This package provides the foundational components for the API:
 - Middleware components
 - Decorators for endpoints
 - Common dependencies
+- Documentation HTML templates
 """
 
 # Configuration
