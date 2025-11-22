@@ -1,13 +1,7 @@
 """
 Script de prueba para verificar la configuración del API
 """
-import sys
-from pathlib import Path
-
-# Agregar el directorio padre (restApi) al path
-sys.path.insert(0, str(Path(__file__).parent.parent))
-
-from app.core.config import settings
+from api_config import settings
 
 print("=" * 60)
 print("API Configuration Test")

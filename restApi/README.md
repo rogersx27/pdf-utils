@@ -100,15 +100,37 @@ The API is structured to be extended with additional endpoints for:
 
 ```
 restApi/
-├── main.py              # FastAPI entry point
-├── api_config.py        # API configuration settings
+├── main.py                  # FastAPI entry point
+├── app/                     # Application package
+│   ├── core/               # Core configuration
+│   │   ├── config.py       # Settings
+│   │   └── __init__.py
+│   ├── api/                # API endpoints
+│   │   └── v1/            # API version 1
+│   │       ├── router.py   # Main router
+│   │       └── endpoints/  # Endpoint modules
+│   │           ├── health.py
+│   │           └── system.py
+│   ├── schemas/            # Pydantic schemas
+│   │   └── common.py
+│   ├── services/           # Business logic
+│   ├── models/             # Database models (future)
+│   └── README.md           # App structure docs
 ├── scripts/
-│   └── test_config.py   # Configuration test script
-├── .env.example         # Environment configuration example
-├── .env                 # Your local config (not in git)
-├── .gitignore           # Git ignore file
-└── README.md            # This file
+│   └── test_config.py      # Configuration test script
+├── .env.example            # Environment configuration example
+├── .env                    # Your local config (not in git)
+├── .gitignore              # Git ignore file
+└── README.md               # This file
 ```
+
+**Architecture**:
+- **Modular**: Separación clara de responsabilidades
+- **Versionado**: API v1 con posibilidad de v2, v3, etc.
+- **Escalable**: Fácil agregar nuevos endpoints y servicios
+- **Clean**: Siguiendo principios SOLID y mejores prácticas de FastAPI
+
+Ver `app/README.md` para detalles de la estructura interna.
 
 **Note**: 
 - Las dependencias de FastAPI están en el `requirements.txt` principal del proyecto.

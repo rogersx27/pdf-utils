@@ -2,15 +2,13 @@
 FastAPI REST API for PDF Analyzer
 Entry point for the PDF analysis REST API service.
 """
-from typing import Optional
-
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
 import uvicorn
 
-from api_config import settings
+from app.core.config import settings
+from app.api.v1.router import api_router
 
 # Create FastAPI app instance
 app = FastAPI(
@@ -30,62 +28,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# Pydantic models for request/response validation
-class HealthResponse(BaseModel):
-    status: str
-    message: str
-    version: str
-
-
-class ErrorResponse(BaseModel):
-    detail: str
-    error_code: Optional[str] = None
-
-
-# Root endpoint
-@app.get("/", response_model=HealthResponse)
-async def root():
-    """Root endpoint - API information"""
-    return HealthResponse(
-        status="online",
-        message="PDF Analyzer API is running",
-        version=settings.api_version
-    )
-
-
-# Health check endpoint
-@app.get("/health", response_model=HealthResponse)
-async def health_check():
-    """Health check endpoint"""
-    return HealthResponse(
-        status="healthy",
-        message="API is operational",
-        version=settings.api_version
-    )
-
-
-# API v1 endpoints
-@app.get("/api/v1/info")
-async def api_info():
-    """Get API information and available endpoints"""
-    return {
-        "api_name": settings.api_title,
-        "version": settings.api_version,
-        "environment": settings.environment,
-        "endpoints": {
-            "/": "Root endpoint",
-            "/health": "Health check",
-            "/docs": "Interactive API documentation (Swagger UI)",
-            "/redoc": "Alternative API documentation (ReDoc)",
-            "/api/v1/info": "API information"
-        },
-        "features": [
-            "PDF document analysis",
-            "Bank statement extraction",
-            "Transaction data processing"
-        ]
-    }
+# Include API router
+app.include_router(api_router)
 
 
 # Exception handlers
