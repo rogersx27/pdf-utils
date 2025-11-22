@@ -12,7 +12,7 @@ import sys
 from pathlib import Path
 
 # Agregar src al path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pdf_analyzer import LocalPDFRepository, SecurityService, copy_pdf, ensure_directory
 
@@ -20,8 +20,8 @@ def main():
     # Configuración
     password = sys.argv[2] if len(sys.argv) > 2 and sys.argv[1] == "--password" else None
 
-    data_dir = Path(__file__).parent / "data"
-    output_dir = Path(__file__).parent / "password-less"
+    data_dir = Path(__file__).parent.parent / "data"
+    output_dir = Path(__file__).parent.parent / "password-less"
 
     # Crear carpeta de salida
     ensure_directory(output_dir)

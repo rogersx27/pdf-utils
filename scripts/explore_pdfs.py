@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 # Agregar src al path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pdf_analyzer import ExtractorService, LocalPDFRepository
 
@@ -122,7 +122,7 @@ def main():
     # Filtrar flags de los argumentos
     pdf_args = [a for a in args if not a.startswith("--")]
 
-    data_dir = Path(__file__).parent / "data"
+    data_dir = Path(__file__).parent.parent / "data"
     extractor = ExtractorService()
 
     if pdf_args:

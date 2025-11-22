@@ -12,7 +12,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Agregar src al path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from pdf_analyzer import (
     LocalPDFRepository,
@@ -247,7 +247,7 @@ def process_pdf(pdf_path: Path, output_dir: Path, savings_extractor, credit_extr
 def main():
     # Parsear argumentos
     args = sys.argv[1:]
-    source_dir = Path(__file__).parent / "password-less"
+    source_dir = Path(__file__).parent.parent / "password-less"
 
     # Buscar --source
     for i, arg in enumerate(args):
@@ -257,7 +257,7 @@ def main():
             break
 
     # Crear carpeta de salida
-    output_dir = Path(__file__).parent / "data-extracted"
+    output_dir = Path(__file__).parent.parent / "data-extracted"
     ensure_directory(output_dir)
     print(f"Carpeta de salida: {output_dir}")
 

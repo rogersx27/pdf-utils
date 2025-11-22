@@ -21,7 +21,7 @@ from pathlib import Path
 from datetime import datetime
 
 # Agregar src al path
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 from dotenv import load_dotenv
 from tabulate import tabulate
@@ -286,14 +286,14 @@ def main():
             options["format"] = args[idx + 1]
     
     # Directorio fuente
-    source_dir = Path(__file__).parent / "password-less"
+    source_dir = Path(__file__).parent.parent / "password-less"
     if "--source" in args:
         idx = args.index("--source")
         if idx + 1 < len(args):
             source_dir = Path(args[idx + 1])
     
     # Directorio de salida
-    output_dir = Path(__file__).parent / "data-extracted"
+    output_dir = Path(__file__).parent.parent / "data-extracted"
     ensure_directory(output_dir)
     
     print(f"📂 Fuente: {source_dir}")
