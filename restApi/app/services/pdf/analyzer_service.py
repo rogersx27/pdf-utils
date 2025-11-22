@@ -114,10 +114,13 @@ class PDFAnalyzerService(BaseService):
         Returns:
             PDFDocumentSchema with parsed information
         """
-        pdf_path = self._resolve_and_validate_path(filename)
+        self._resolve_and_validate_path(filename)  # Validates the path exists
 
         try:
-            document = self.repository.get(str(pdf_path))
+            document = self.repository.get(filename)  # Pass filename, not full path
+            if document is None:
+                from app.core.exceptions import PDFNotFoundError
+                raise PDFNotFoundError(filename)
             return self._document_to_schema(document)
         except ValueError as e:
             raise InvalidFilenameError(filename) from e
