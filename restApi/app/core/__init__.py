@@ -66,6 +66,7 @@ from .decorators import (
     handle_not_found,
     require_fields,
     timing_decorator,
+    handle_controller_errors,
 )
 
 # Dependencies
@@ -132,6 +133,7 @@ __all__ = [
     "handle_not_found",
     "require_fields",
     "timing_decorator",
+    "handle_controller_errors",
     
     # Dependencies
     "get_pdf_password",

@@ -13,7 +13,12 @@ from fastapi import Request
 from app.core.exceptions import (
     BadRequestError,
     PDFPasswordError,
-    NotFoundError
+    NotFoundError,
+    PDFAnalyzerException,
+    PDFNotFoundError,
+    PDFParsingError,
+    ExtractionError,
+    InternalServerError,
 )
 
 logger = logging.getLogger(__name__)
@@ -284,7 +289,7 @@ def require_fields(*field_names: str):
 def timing_decorator(func: Callable) -> Callable:
     """
     Decorator to measure and log execution time.
-    
+
     Usage:
         @router.get("/slow-operation")
         @timing_decorator
@@ -296,9 +301,79 @@ def timing_decorator(func: Callable) -> Callable:
         start = time.time()
         result = await func(*args, **kwargs)
         elapsed = time.time() - start
-        
+
         logger.info(f"{func.__name__} took {elapsed:.3f}s to execute")
-        
+
         return result
-        
+
+    return wrapper
+
+
+def handle_controller_errors(func: Callable) -> Callable:
+    """
+    Decorator for controller methods to handle errors consistently.
+
+    Catches domain-specific exceptions and converts them to appropriate
+    HTTP exceptions. Logs errors with context for debugging.
+
+    Handles:
+    - FileNotFoundError -> PDFNotFoundError (404)
+    - ValueError -> BadRequestError (400)
+    - PermissionError -> PDFPasswordError (401)
+    - PDFAnalyzerException -> Re-raised as-is
+    - Other exceptions -> InternalServerError (500)
+
+    Usage:
+        class MyController(BaseController):
+            @handle_controller_errors
+            async def my_method(self, filename: str):
+                # Errors are automatically handled
+                return self.service.do_something(filename)
+    """
+    @functools.wraps(func)
+    async def wrapper(*args, **kwargs) -> Any:
+        # Extract controller instance for logging
+        controller = args[0] if args else None
+        controller_name = controller.__class__.__name__ if controller else "Unknown"
+        method_name = func.__name__
+
+        try:
+            return await func(*args, **kwargs)
+
+        except PDFAnalyzerException:
+            # Re-raise our custom exceptions as-is
+            raise
+
+        except FileNotFoundError as e:
+            filename = kwargs.get('filename', str(e))
+            logger.warning(
+                f"{controller_name}.{method_name}: File not found - {filename}"
+            )
+            raise PDFNotFoundError(filename=filename)
+
+        except ValueError as e:
+            logger.warning(
+                f"{controller_name}.{method_name}: Validation error - {str(e)}"
+            )
+            raise BadRequestError(detail=str(e))
+
+        except PermissionError as e:
+            logger.warning(
+                f"{controller_name}.{method_name}: Permission denied - {str(e)}"
+            )
+            raise PDFPasswordError(
+                detail="Access denied. Check PDF password or file permissions."
+            )
+
+        except Exception as e:
+            error_id = f"{int(time.time())}"
+            logger.error(
+                f"{controller_name}.{method_name}: Unexpected error [ID: {error_id}] - {str(e)}",
+                exc_info=True
+            )
+            raise InternalServerError(
+                detail=f"An unexpected error occurred. Error ID: {error_id}",
+                error_code="CONTROLLER_ERROR"
+            )
+
     return wrapper
