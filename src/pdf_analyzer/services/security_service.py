@@ -5,7 +5,6 @@ Proporciona funcionalidades para gestionar contraseñas
 y encriptación de documentos PDF.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -14,16 +13,12 @@ from pypdf import PdfReader, PdfWriter
 from logger import setup_logger, setup_processor_logger
 
 from pdf_analyzer.models import PDFDocument
+from pdf_analyzer.concerns import PathResolvableMixin, PasswordAwareMixin
 
 logger = setup_processor_logger(setup_logger, __name__)
 
 
-def get_default_password() -> Optional[str]:
-    """Obtiene la contraseña por defecto desde variable de entorno."""
-    return os.environ.get("PDF_PASSWORD")
-
-
-class SecurityService:
+class SecurityService(PathResolvableMixin, PasswordAwareMixin):
     """
     Servicio para gestión de seguridad de PDFs.
 
@@ -37,7 +32,7 @@ class SecurityService:
         Args:
             password: Contraseña por defecto para operaciones.
         """
-        self._password = password or get_default_password()
+        self._init_password(password)
         logger.debug("SecurityService inicializado")
 
     def is_encrypted(self, document: PDFDocument | Path | str) -> bool:
@@ -263,9 +258,3 @@ class SecurityService:
 
         return results
 
-    @staticmethod
-    def _resolve_path(document: PDFDocument | Path | str) -> Path:
-        """Resuelve la ruta de un documento."""
-        if isinstance(document, PDFDocument):
-            return document.path
-        return Path(document)

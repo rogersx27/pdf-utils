@@ -12,11 +12,12 @@ from logger import setup_logger, setup_coordinator_logger
 
 from pdf_analyzer.models import PDFDocument
 from pdf_analyzer.services.reader_service import ReaderService
+from pdf_analyzer.concerns import PathResolvableMixin, CacheableMixin
 
 logger = setup_coordinator_logger(setup_logger, __name__)
 
 
-class AnalyzerService:
+class AnalyzerService(PathResolvableMixin, CacheableMixin):
     """
     Servicio para análisis de contenido de PDFs.
 
@@ -31,7 +32,7 @@ class AnalyzerService:
             password: Contraseña para PDFs protegidos.
         """
         self._reader = ReaderService(password)
-        self._cache: dict[str, dict] = {}
+        self._init_cache()
         logger.debug("AnalyzerService inicializado")
 
     def analyze(self, document: PDFDocument | Path | str) -> dict:
@@ -48,9 +49,10 @@ class AnalyzerService:
         cache_key = str(path)
 
         # Verificar caché
-        if cache_key in self._cache:
+        cached = self._get_cached(cache_key)
+        if cached is not None:
             logger.debug(f"Usando caché para: {path.name}")
-            return self._cache[cache_key]
+            return cached
 
         logger.info(f"Analizando: {path.name}")
 
@@ -72,7 +74,7 @@ class AnalyzerService:
         }
 
         # Cachear resultado
-        self._cache[cache_key] = analysis
+        self._set_cached(cache_key, analysis)
 
         logger.info(f"Análisis completado: {num_pages} páginas, {len(tables)} tablas")
         return analysis
@@ -200,14 +202,3 @@ class AnalyzerService:
             },
         }
 
-    def clear_cache(self) -> None:
-        """Limpia la caché de análisis."""
-        self._cache.clear()
-        logger.debug("Caché limpiada")
-
-    @staticmethod
-    def _resolve_path(document: PDFDocument | Path | str) -> Path:
-        """Resuelve la ruta de un documento."""
-        if isinstance(document, PDFDocument):
-            return document.path
-        return Path(document)

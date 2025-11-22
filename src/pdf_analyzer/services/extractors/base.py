@@ -1,58 +1,24 @@
 """
-Servicio de extracción de datos de PDFs.
+Servicio base de extracción de datos de PDFs.
 
 Proporciona funciones exploratorias para analizar la estructura
 y contenido de documentos PDF antes de crear extractores específicos.
 """
 
-import os
 import re
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
 import pdfplumber
 
 from logger import setup_logger, setup_processor_logger
-from pdf_analyzer.models import PDFDocument
+from pdf_analyzer.models import PDFDocument, TableInfo, Section
+from pdf_analyzer.concerns import PathResolvableMixin, PasswordAwareMixin
 
 logger = setup_processor_logger(setup_logger, __name__)
 
 
-def get_default_password() -> Optional[str]:
-    """Obtiene la contraseña por defecto desde variable de entorno."""
-    return os.environ.get("PDF_PASSWORD")
-
-
-@dataclass
-class TableInfo:
-    """Información de una tabla extraída con su posición."""
-
-    page: int
-    bbox: tuple  # (x0, y0, x1, y1)
-    data: list[list[str]]
-    rows: int = 0
-    cols: int = 0
-
-    def __post_init__(self):
-        if self.data:
-            self.rows = len(self.data)
-            self.cols = max(len(row) for row in self.data) if self.data else 0
-
-
-@dataclass
-class Section:
-    """Sección o bloque detectado en el documento."""
-
-    type: str  # "header", "body", "table", "footer", "unknown"
-    content: str
-    page: int
-    line_start: int = 0
-    line_end: int = 0
-    metadata: dict = field(default_factory=dict)
-
-
-class ExtractorService:
+class ExtractorService(PathResolvableMixin, PasswordAwareMixin):
     """
     Servicio para extracción exploratoria de datos de PDFs.
 
@@ -67,7 +33,7 @@ class ExtractorService:
         Args:
             password: Contraseña para PDFs protegidos.
         """
-        self._password = password or get_default_password()
+        self._init_password(password)
         logger.debug("ExtractorService inicializado")
 
     def extract_text_by_page(
@@ -245,10 +211,3 @@ class ExtractorService:
             return "table"
 
         return "body"
-
-    @staticmethod
-    def _resolve_path(document: PDFDocument | Path | str) -> Path:
-        """Resuelve la ruta de un documento."""
-        if isinstance(document, PDFDocument):
-            return document.path
-        return Path(document)

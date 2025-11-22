@@ -6,6 +6,7 @@ Arquitectura basada en el patrón Repository con las siguientes capas:
     - repositories: Acceso a datos (LocalPDFRepository)
     - services: Lógica de negocio (Reader, Analyzer, Security)
     - file_manager: Operaciones de archivos (Operations, Organizer, Registry)
+    - concerns: Mixins y protocolos reutilizables
 
 Uso básico:
     from pdf_analyzer import LocalPDFRepository, AnalyzerService
@@ -16,6 +17,15 @@ Uso básico:
     analyzer = AnalyzerService()
     result = analyzer.analyze(docs[0])
 """
+
+# Concerns (Mixins reutilizables)
+from .concerns import (
+    PathResolvableMixin,
+    PasswordAwareMixin,
+    CacheableMixin,
+    Serializable,
+    get_default_password,
+)
 
 # Models
 from .models import PDFDocument, PDFDocumentInfo
@@ -99,6 +109,12 @@ PDFExtractor = ExtractorService
 __version__ = "1.0.0"
 
 __all__ = [
+    # Concerns (Mixins)
+    "PathResolvableMixin",
+    "PasswordAwareMixin",
+    "CacheableMixin",
+    "Serializable",
+    "get_default_password",
     # Models
     "PDFDocument",
     "PDFDocumentInfo",

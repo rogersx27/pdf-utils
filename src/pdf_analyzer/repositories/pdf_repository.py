@@ -12,11 +12,12 @@ from logger import setup_logger, setup_processor_logger
 
 from pdf_analyzer.models import PDFDocument
 from pdf_analyzer.repositories.base import BaseRepository
+from pdf_analyzer.concerns import CacheableMixin
 
 logger = setup_processor_logger(setup_logger, __name__)
 
 
-class LocalPDFRepository(BaseRepository):
+class LocalPDFRepository(BaseRepository, CacheableMixin):
     """
     Repositorio de PDFs en sistema de archivos local.
 
@@ -32,7 +33,7 @@ class LocalPDFRepository(BaseRepository):
             base_dir: Directorio raíz donde se almacenan los PDFs.
         """
         self._base_dir = Path(base_dir)
-        self._cache: dict[str, PDFDocument] = {}
+        self._init_cache()
         self._ensure_directory()
         self.refresh()
         logger.debug(f"LocalPDFRepository inicializado en: {self._base_dir}")
@@ -62,7 +63,7 @@ class LocalPDFRepository(BaseRepository):
         if not identifier.lower().endswith(".pdf"):
             identifier = f"{identifier}.pdf"
 
-        doc = self._cache.get(identifier)
+        doc = self._get_cached(identifier)
         if doc is None:
             logger.debug(f"Documento no encontrado en caché: {identifier}")
         return doc
@@ -74,7 +75,7 @@ class LocalPDFRepository(BaseRepository):
         Returns:
             Lista de todos los PDFDocument.
         """
-        return list(self._cache.values())
+        return list(self._cache.values())  # Acceso directo al dict del mixin
 
     def find(
         self,
@@ -134,7 +135,7 @@ class LocalPDFRepository(BaseRepository):
         Returns:
             Número de documentos.
         """
-        return len(self._cache)
+        return self.cache_size  # Usar propiedad del mixin
 
     def add(self, source: Path | str, dest_name: Optional[str] = None) -> PDFDocument:
         """
@@ -172,7 +173,7 @@ class LocalPDFRepository(BaseRepository):
 
         # Crear y cachear el documento
         doc = PDFDocument.from_path(dest_path)
-        self._cache[dest_name] = doc
+        self._set_cached(dest_name, doc)
 
         return doc
 
@@ -193,7 +194,7 @@ class LocalPDFRepository(BaseRepository):
 
         try:
             doc.path.unlink()
-            del self._cache[doc.filename]
+            self._remove_cached(doc.filename)
             logger.info(f"Documento eliminado: {doc.filename}")
             return True
         except Exception as e:
@@ -204,14 +205,14 @@ class LocalPDFRepository(BaseRepository):
         """
         Actualiza la caché escaneando el directorio.
         """
-        self._cache.clear()
+        self.clear_cache()
         pdf_files = sorted(self._base_dir.glob("*.pdf"))
 
         for pdf_path in pdf_files:
             doc = PDFDocument.from_path(pdf_path)
-            self._cache[doc.filename] = doc
+            self._set_cached(doc.filename, doc)
 
-        logger.debug(f"Caché actualizada: {len(self._cache)} documentos")
+        logger.debug(f"Caché actualizada: {self.cache_size} documentos")
 
     def get_types(self) -> list[str]:
         """

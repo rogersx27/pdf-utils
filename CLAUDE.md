@@ -36,15 +36,30 @@ python scripts/unlock_pdfs.py          # Remove password protection
 The project follows a Repository pattern with layered architecture:
 
 ### src/pdf_analyzer/
-- **models/**: Domain entities (`PDFDocument`, `PDFDocumentInfo`) - dataclasses representing PDF documents with parsed filename info (tipo, fecha, numero)
+- **models/**: Domain entities and dataclasses
+  - `PDFDocument`, `PDFDocumentInfo`: PDF document representation with parsed filename info
+  - `Transaction`, `AccountSummary`: Base transaction models
+  - `TableInfo`, `Section`: Extraction structure models
+  - `AccountInfo`, `FinancialSummary`, `SavingsTransaction`, `SavingsAccountStatement`: Savings account models
+  - `CardInfo`, `CreditLimit`, `InterestRates`, `BalanceSummary`, `MinimumPayment`, `CreditCardTransaction`, `CurrencyStatement`, `CreditCardStatement`: Credit card models
+- **concerns/**: Reusable mixins for shared behavior
+  - `PathResolvableMixin`: Document path resolution (`_resolve_path()`)
+  - `PasswordAwareMixin`: Password handling (`_init_password()`, `get_default_password()`)
+  - `CacheableMixin`: Caching operations (`_get_cached()`, `_set_cached()`, `clear_cache()`)
+  - `Serializable`: Protocol for `to_dict()` method
 - **repositories/**: Data access layer (`LocalPDFRepository`) - manages PDF files in the filesystem with caching
 - **services/**: Business logic
   - `ReaderService`: Text/table extraction using pypdf and pdfplumber
   - `AnalyzerService`: Analysis operations with caching (search, compare)
   - `SecurityService`: Password operations (add/remove encryption)
-  - `SavingsAccountExtractor`: Extracts savings account data (AccountInfo, FinancialSummary, Transactions)
-  - `CreditCardExtractor`: Extracts credit card data (CardInfo, CreditLimit, InterestRates, Transactions)
-  - `BancolombiaExtractor`: Core engine for Bancolombia-specific PDF parsing
+  - **extractors/**: Specialized data extractors
+    - `ExtractorService`: Base explorer for PDF structure analysis
+    - `BancolombiaExtractor`: Core engine for Bancolombia-specific PDF parsing
+    - `SavingsAccountExtractor`: Extracts savings account data
+    - `CreditCardExtractor`: Extracts credit card data (multi-currency support)
+  - **parsers/**: Parsing utilities
+    - `NumberParser`: Dual format number parsing (US/Colombian)
+    - `parse_currency()`: Currency string to float conversion
 - **file_manager/**: File operations (`FileOperations`, `PDFOrganizer`, `PDFRegistry`) - copy/move/rename, organize by type/year, export inventories
 
 ### src/data_processor/
@@ -75,7 +90,28 @@ from pdf_analyzer import (
 )
 
 # Data extractors
-from pdf_analyzer.services import SavingsAccountExtractor, CreditCardExtractor
+from pdf_analyzer.services import (
+    SavingsAccountExtractor, CreditCardExtractor, BancolombiaExtractor,
+    ExtractorService,
+)
+
+# Models (dataclasses)
+from pdf_analyzer.models import (
+    # Savings account
+    AccountInfo, FinancialSummary, SavingsTransaction, SavingsAccountStatement,
+    # Credit card
+    CardInfo, CreditLimit, CreditCardTransaction, CreditCardStatement,
+    # Base
+    Transaction, TableInfo, Section,
+)
+
+# Concerns (mixins for extending classes)
+from pdf_analyzer.concerns import (
+    PathResolvableMixin, PasswordAwareMixin, CacheableMixin, Serializable,
+)
+
+# Parsers
+from pdf_analyzer.services.parsers import NumberParser, parse_currency
 
 # Convenience functions
 from pdf_analyzer import list_pdfs, extract_text, analyze, search_in_pdf

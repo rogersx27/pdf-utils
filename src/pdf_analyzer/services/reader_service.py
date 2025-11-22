@@ -5,7 +5,6 @@ Proporciona funcionalidades para extraer texto, tablas y
 metadatos de documentos PDF.
 """
 
-import os
 from pathlib import Path
 from typing import Optional
 
@@ -15,16 +14,12 @@ from pypdf import PdfReader
 from logger import setup_logger, setup_processor_logger
 
 from pdf_analyzer.models import PDFDocument
+from pdf_analyzer.concerns import PathResolvableMixin, PasswordAwareMixin
 
 logger = setup_processor_logger(setup_logger, __name__)
 
 
-def get_default_password() -> Optional[str]:
-    """Obtiene la contraseña por defecto desde variable de entorno."""
-    return os.environ.get("PDF_PASSWORD")
-
-
-class ReaderService:
+class ReaderService(PathResolvableMixin, PasswordAwareMixin):
     """
     Servicio para lectura y extracción de contenido de PDFs.
 
@@ -40,7 +35,7 @@ class ReaderService:
             password: Contraseña para PDFs protegidos.
                      Usa PDF_PASSWORD del entorno si no se especifica.
         """
-        self._password = password or get_default_password()
+        self._init_password(password)
         logger.debug("ReaderService inicializado")
 
     def _open_pdf(self, path: Path):
@@ -191,9 +186,3 @@ class ReaderService:
         document.metadata = self.read_metadata(document)
         return document
 
-    @staticmethod
-    def _resolve_path(document: PDFDocument | Path | str) -> Path:
-        """Resuelve la ruta de un documento."""
-        if isinstance(document, PDFDocument):
-            return document.path
-        return Path(document)
