@@ -82,7 +82,7 @@ async def list_pdfs(
     description="Retrieve detailed information about a specific PDF document"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def get_pdf(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller)
@@ -109,7 +109,7 @@ async def get_pdf(
     description="Extract all text content from a PDF document"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def extract_text(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller),
@@ -133,7 +133,7 @@ async def extract_text(
     description="Extract all table structures from a PDF document"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def extract_tables(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller),
@@ -161,7 +161,7 @@ async def extract_tables(
     description="Search for specific text within a PDF document"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def search_in_pdf(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller),
@@ -191,7 +191,7 @@ async def search_in_pdf(
     description="Extract structured data from a savings account statement PDF"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def extract_savings_statement(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller),
@@ -215,7 +215,7 @@ async def extract_savings_statement(
     description="Extract structured data from a credit card statement PDF"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def extract_credit_card_statement(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller),
@@ -244,7 +244,7 @@ async def extract_credit_card_statement(
     description="Retrieve technical metadata from a PDF document"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def get_metadata(
     filename: str,
     controller: PDFController = Depends(get_pdf_controller),

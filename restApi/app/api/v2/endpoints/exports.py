@@ -48,7 +48,7 @@ def get_export_controller(password: OptionalPasswordDep = None) -> ExportControl
     description="Extract and export savings account statement to CSV or Excel"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def export_savings_account(
     filename: str,
     export_format: Literal["csv", "excel"] = Query(
@@ -96,7 +96,7 @@ async def export_savings_account(
     description="Validate extracted savings account data before export"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def validate_savings_data(
     filename: str,
     controller: ExportController = Depends(get_export_controller),
@@ -127,7 +127,7 @@ async def validate_savings_data(
     description="Extract and export credit card statement to CSV or Excel"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def export_credit_card(
     filename: str,
     export_format: Literal["csv", "excel"] = Query(
@@ -175,7 +175,7 @@ async def export_credit_card(
     description="Validate extracted credit card data before export"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def validate_credit_card_data(
     filename: str,
     controller: ExportController = Depends(get_export_controller),

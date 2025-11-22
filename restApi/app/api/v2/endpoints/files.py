@@ -96,7 +96,7 @@ async def move_file(
     description="Rename a PDF file within the same directory"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def rename_file(
     source: str = Query(..., description="Source filename"),
     new_name: str = Query(..., description="New filename"),
@@ -121,7 +121,7 @@ async def rename_file(
     description="Permanently delete a PDF file"
 )
 @log_endpoint
-@validate_filename_format
+@validate_filename_format()
 async def delete_file(
     filename: str,
     controller: FileController = Depends(get_file_controller)
