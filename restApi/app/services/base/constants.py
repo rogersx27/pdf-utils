@@ -126,6 +126,9 @@ KEY_TARJETA: Final[str] = "tarjeta"
 KEY_CUPO: Final[str] = "cupo"
 KEY_MOVIMIENTOS_PESOS: Final[str] = "movimientos_pesos"
 KEY_MOVIMIENTOS_DOLARES: Final[str] = "movimientos_dolares"
+KEY_VALIDACION: Final[str] = "validacion"
+KEY_PESOS: Final[str] = "pesos"
+KEY_DOLARES: Final[str] = "dolares"
 
 # Account info keys
 KEY_NUMERO_CUENTA: Final[str] = "numero_cuenta"

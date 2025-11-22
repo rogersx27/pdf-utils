@@ -84,10 +84,7 @@ class PDFAnalyzerService(BaseService):
             password: Default password for encrypted PDFs
         """
         self._init_password(password)
-        self.repository = LocalPDFRepository(
-            str(settings.data_dir),
-            password=self.password
-        )
+        self.repository = LocalPDFRepository(str(settings.data_dir))
 
     def list_pdfs(self, filters: Optional[dict] = None) -> list[PDFDocumentSchema]:
         """
@@ -117,10 +114,13 @@ class PDFAnalyzerService(BaseService):
         Returns:
             PDFDocumentSchema with parsed information
         """
-        pdf_path = self._resolve_and_validate_path(filename)
+        self._resolve_and_validate_path(filename)  # Validates the path exists
 
         try:
-            document = self.repository.get(str(pdf_path))
+            document = self.repository.get(filename)  # Pass filename, not full path
+            if document is None:
+                from app.core.exceptions import PDFNotFoundError
+                raise PDFNotFoundError(filename)
             return self._document_to_schema(document)
         except ValueError as e:
             raise InvalidFilenameError(filename) from e
@@ -323,7 +323,7 @@ class PDFAnalyzerService(BaseService):
                 fecha=document.info.fecha,
                 tipo=document.info.tipo,
                 numero=document.info.numero,
-                filename=document.info.filename
+                filename=document.filename  # filename is on PDFDocument, not PDFDocumentInfo
             ),
             exists=document.path.exists(),
             size_bytes=document.path.stat().st_size if document.path.exists() else None,
