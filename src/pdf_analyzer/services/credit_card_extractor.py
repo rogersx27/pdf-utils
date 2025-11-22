@@ -1,8 +1,8 @@
 """
-Extractor específico para extractos de Tarjeta de Crédito MasterCard.
+Extractor de tarjetas de crédito que usa BancolombiaExtractor como motor.
 
-Parsea la información estructurada de los extractos bancarios
-de tarjetas de crédito de Bancolombia.
+Este extractor es un wrapper que adapta BancolombiaExtractor a la interfaz
+esperada por pdf_analyzer manteniendo compatibilidad con el sistema existente.
 """
 
 import os
@@ -14,6 +14,7 @@ from typing import Optional
 
 from logger import setup_logger, setup_processor_logger
 from pdf_analyzer.models import PDFDocument
+from pdf_analyzer.services.bancolombia_extractor import BancolombiaExtractor, Transaction as BancoTransaction
 from pdf_analyzer.services.extractor_service import ExtractorService
 
 logger = setup_processor_logger(setup_logger, __name__)
@@ -247,11 +248,10 @@ class CreditCardStatement:
 
 class CreditCardExtractor:
     """
-    Extractor especializado para extractos de Tarjeta de Crédito MasterCard.
+    Extractor para tarjetas de crédito que usa BancolombiaExtractor.
 
-    Parsea extractos de Bancolombia con formato TARJETA_MASTERCARD
-    extrayendo información de tarjeta, cupos, tasas y transacciones
-    en pesos y dólares.
+    Este es un wrapper que usa BancolombiaExtractor como motor principal
+    y ExtractorService para funcionalidad adicional específica de tarjetas.
     """
 
     def __init__(self, password: Optional[str] = None):
@@ -262,8 +262,9 @@ class CreditCardExtractor:
             password: Contraseña para PDFs protegidos.
         """
         self._password = password or get_default_password()
-        self._extractor = ExtractorService(password)
-        logger.debug("CreditCardExtractor inicializado")
+        self._bancolombia = BancolombiaExtractor(password=self._password)
+        self._extractor = ExtractorService(password=self._password)  # Para funciones auxiliares
+        logger.debug("CreditCardExtractor initialized (using BancolombiaExtractor)")
 
     def extract(
         self, document: PDFDocument | Path | str
@@ -278,16 +279,16 @@ class CreditCardExtractor:
             CreditCardStatement con toda la información extraída.
         """
         path = self._resolve_path(document)
-        logger.info(f"Extrayendo extracto de tarjeta de crédito: {path.name}")
+        logger.info(f"Extracting credit card statement: {path.name}")  # pylint: disable=logging-fstring-interpolation
 
-        # Obtener texto por página
+        # Obtener texto por página para manejar múltiples monedas
         text_by_page = self._extractor.extract_text_by_page(path)
 
         # Identificar páginas por moneda
         pesos_text = ""
         dolares_text = ""
 
-        for page_num, content in text_by_page.items():
+        for content in text_by_page.values():
             if "ESTADO DE CUENTA EN: PESOS" in content:
                 pesos_text = content
             elif "ESTADO DE CUENTA EN: DOLARES" in content:
@@ -296,7 +297,7 @@ class CreditCardExtractor:
         # Usar el primer texto disponible para info general
         first_text = pesos_text or dolares_text or "\n".join(text_by_page.values())
 
-        # Extraer componentes
+        # Extraer componentes (mantener lógica especializada)
         card_info = self._extract_card_info(first_text)
         credit_limit = self._extract_credit_limit(first_text)
 
@@ -322,8 +323,8 @@ class CreditCardExtractor:
         if dolares_statement:
             total_tx += len(dolares_statement.transactions)
 
-        logger.info(
-            f"Extracto procesado: {total_tx} transacciones, "
+        logger.info(  # pylint: disable=logging-fstring-interpolation
+            f"Statement processed: {total_tx} transactions, "
             f"pago total pesos: {statement.pago_total_pesos}"
         )
 
@@ -362,22 +363,18 @@ class CreditCardExtractor:
             Lista de CreditCardTransaction.
         """
         path = self._resolve_path(document)
-        text_by_page = self._extractor.extract_text_by_page(path)
-
-        target_text = ""
-        for content in text_by_page.values():
-            if f"ESTADO DE CUENTA EN: {moneda}" in content:
-                target_text = content
-                break
-
-        if not target_text:
-            return []
-
-        return self._extract_transactions(target_text)
+        
+        # Usa BancolombiaExtractor para la extracción base
+        data = self._bancolombia.extract_text_sections(str(path))
+        
+        # Convertir transacciones de Bancolombia a CreditCardTransaction
+        transactions = self._convert_to_credit_card_transactions(data['transactions'])
+        
+        return transactions
 
     def _extract_card_info(self, text: str) -> CardInfo:
-        """Extrae información de la tarjeta del texto."""
-        logger.debug("Extrayendo información de tarjeta")
+        """Extrae información de la tarjeta del texto (lógica específica de tarjetas)."""
+        logger.debug("Extracting card information")
 
         # Titular: SEÑOR (A): NOMBRE
         titular = ""
@@ -399,7 +396,6 @@ class CreditCardExtractor:
         lines = text.split("\n")
         for i, line in enumerate(lines):
             if "SEÑOR (A):" in line or "SENOR (A):" in line:
-                # Las siguientes líneas suelen tener dirección
                 if i + 2 < len(lines):
                     direccion = lines[i + 1].strip() if lines[i + 1].strip() else ""
                 if i + 3 < len(lines):
@@ -408,7 +404,7 @@ class CreditCardExtractor:
                     departamento = lines[i + 3].strip() if lines[i + 3].strip() else ""
                 break
 
-        # Periodo facturado: Desde: DD/MM/YYYY Hasta: DD/MM/YYYY
+        # Periodo facturado
         periodo_desde = None
         periodo_hasta = None
         periodo_match = re.search(
@@ -426,15 +422,15 @@ class CreditCardExtractor:
                     int(hasta_parts[2]), int(hasta_parts[1]), int(hasta_parts[0])
                 )
             except (ValueError, IndexError):
-                logger.warning("No se pudo parsear el periodo")
+                logger.warning("Could not parse period")
 
-        # Fecha de pago: Pague antes de DD/MM/YYYY
+        # Fecha de pago
         fecha_pago = None
         pago_match = re.search(r"Pague antes de\s*(\d{2}/\d{2}/\d{4})", text)
         if pago_match:
             try:
                 pago_parts = pago_match.group(1).split("/")
-                if pago_parts[0] != "00":  # Ignorar fechas inválidas
+                if pago_parts[0] != "00":
                     fecha_pago = date(
                         int(pago_parts[2]), int(pago_parts[1]), int(pago_parts[0])
                     )
@@ -454,22 +450,24 @@ class CreditCardExtractor:
 
     def _extract_credit_limit(self, text: str) -> CreditLimit:
         """Extrae información de cupos del texto."""
-        logger.debug("Extrayendo información de cupos")
+        logger.debug("Extracting credit limit")
+
+        # Usa NumberParser del BancolombiaExtractor
+        parser = self._bancolombia.parser
 
         def parse_money(pattern: str, txt: str) -> float:
             match = re.search(pattern, txt)
             if match:
-                value_str = match.group(1).replace(".", "").replace(",", ".")
                 try:
-                    return float(value_str)
-                except ValueError:
+                    return parser.parse_to_float(match.group(1))
+                except Exception:  # pylint: disable=broad-except
                     return 0.0
             return 0.0
 
-        cupo_total = parse_money(r"Cupo Total\s*\$\s*([\d.,]+)", text)
-        cupo_avances = parse_money(r"Cupo de Avances\s*\$\s*([\d.,]+)", text)
-        disponible_total = parse_money(r"Disponible Total\s*\$\s*([\d.,]+)", text)
-        disponible_avances = parse_money(r"Disponible Avances\s*\$\s*([\d.,]+)", text)
+        cupo_total = parse_money(r"Cupo Total\s*\$?\s*([\d.,]+)", text)
+        cupo_avances = parse_money(r"Cupo de Avances\s*\$?\s*([\d.,]+)", text)
+        disponible_total = parse_money(r"Disponible Total\s*\$?\s*([\d.,]+)", text)
+        disponible_avances = parse_money(r"Disponible Avances\s*\$?\s*([\d.,]+)", text)
 
         return CreditLimit(
             cupo_total=cupo_total,
@@ -482,12 +480,15 @@ class CreditCardExtractor:
         self, text: str, moneda: str
     ) -> CurrencyStatement:
         """Extrae el estado de cuenta de una moneda específica."""
-        logger.debug(f"Extrayendo estado de cuenta en {moneda}")
+        logger.debug(f"Extracting {moneda} statement")  # pylint: disable=logging-fstring-interpolation
 
+        # Estas extracciones son específicas de tarjetas, mantener regex
         balance = self._extract_balance_summary(text)
         minimum = self._extract_minimum_payment(text)
         rates = self._extract_interest_rates(text)
-        transactions = self._extract_transactions(text)
+        
+        # Usar BancolombiaExtractor para transacciones
+        transactions = self._extract_transactions_from_text(text)
 
         return CurrencyStatement(
             moneda=moneda,
@@ -499,28 +500,26 @@ class CreditCardExtractor:
 
     def _extract_balance_summary(self, text: str) -> BalanceSummary:
         """Extrae el resumen de saldo total."""
-        logger.debug("Extrayendo resumen de saldo")
+        parser = self._bancolombia.parser
 
         def parse_money(pattern: str, txt: str) -> float:
             match = re.search(pattern, txt)
             if match:
-                value_str = match.group(1).replace(".", "").replace(",", ".")
                 try:
-                    return float(value_str)
-                except ValueError:
+                    return parser.parse_to_float(match.group(1))
+                except Exception:  # pylint: disable=broad-except
                     return 0.0
             return 0.0
 
-        # Buscar en sección "Resumen Saldo Total"
-        saldo_anterior = parse_money(r"Saldo anterior\s+([\d.,]+)", text)
-        compras_mes = parse_money(r"\+ Compras del mes\s+([\d.,]+)", text)
-        intereses_mora = parse_money(r"\+ Intereses de mora\s+([\d.,]+)", text)
-        intereses_corrientes = parse_money(r"\+ Intereses corrientes\s+([\d.,]+)", text)
-        avances = parse_money(r"\+ Avances\s+([\d.,]+)", text)
-        otros_cargos = parse_money(r"\+ Otros cargos\s+([\d.,]+)", text)
-        pagos_abonos = parse_money(r"- Pagos / abonos\s+([\d.,]+)", text)
-        saldo_favor = parse_money(r"Saldo a favor\s+([\d.,]+)", text)
-        pago_total = parse_money(r"= Pagos total\s+([\d.,]+)", text)
+        saldo_anterior = parse_money(r"Saldo anterior\s+([\d.,\-]+)", text)
+        compras_mes = parse_money(r"\+ Compras del mes\s+([\d.,\-]+)", text)
+        intereses_mora = parse_money(r"\+ Intereses de mora\s+([\d.,\-]+)", text)
+        intereses_corrientes = parse_money(r"\+ Intereses corrientes\s+([\d.,\-]+)", text)
+        avances = parse_money(r"\+ Avances\s+([\d.,\-]+)", text)
+        otros_cargos = parse_money(r"\+ Otros cargos\s+([\d.,\-]+)", text)
+        pagos_abonos = parse_money(r"- Pagos / abonos\s+([\d.,\-]+)", text)
+        saldo_favor = parse_money(r"Saldo a favor\s+([\d.,\-]+)", text)
+        pago_total = parse_money(r"= Pagos total\s+([\d.,\-]+)", text)
 
         return BalanceSummary(
             saldo_anterior=saldo_anterior,
@@ -536,28 +535,26 @@ class CreditCardExtractor:
 
     def _extract_minimum_payment(self, text: str) -> MinimumPayment:
         """Extrae el resumen de pago mínimo."""
-        logger.debug("Extrayendo pago mínimo")
+        parser = self._bancolombia.parser
 
         def parse_money(pattern: str, txt: str) -> float:
             match = re.search(pattern, txt)
             if match:
-                value_str = match.group(1).replace(".", "").replace(",", ".")
                 try:
-                    return float(value_str)
-                except ValueError:
+                    return parser.parse_to_float(match.group(1))
+                except Exception:  # pylint: disable=broad-except
                     return 0.0
             return 0.0
 
-        # Buscar en sección "Resumen Pago Mínimo"
-        saldo_mora = parse_money(r"Saldo en mora\s+([\d.,]+)", text)
-        cuota_compras_mes = parse_money(r"\+ Cuota compras del mes\s+([\d.,]+)", text)
-        intereses_mora = parse_money(r"\+ Intereses de mora\s+([\d.,]+)", text)
-        intereses_corrientes = parse_money(r"\+ Intereses corrientes\s+([\d.,]+)", text)
-        cuota_avances = parse_money(r"\+ Cuota avances\s+([\d.,]+)", text)
-        otros_cargos = parse_money(r"\+ Otros cargos\s+([\d.,]+)", text)
-        cuota_anteriores = parse_money(r"\+ Cuota compras anteriores\s+([\d.,]+)", text)
-        saldo_favor = parse_money(r"- Saldo a favor\s+([\d.,]+)", text)
-        pago_minimo = parse_money(r"= Pago m[ií]nimo\s+([\d.,]+)", text)
+        saldo_mora = parse_money(r"Saldo en mora\s+([\d.,\-]+)", text)
+        cuota_compras_mes = parse_money(r"\+ Cuota compras del mes\s+([\d.,\-]+)", text)
+        intereses_mora = parse_money(r"\+ Intereses de mora\s+([\d.,\-]+)", text)
+        intereses_corrientes = parse_money(r"\+ Intereses corrientes\s+([\d.,\-]+)", text)
+        cuota_avances = parse_money(r"\+ Cuota avances\s+([\d.,\-]+)", text)
+        otros_cargos = parse_money(r"\+ Otros cargos\s+([\d.,\-]+)", text)
+        cuota_anteriores = parse_money(r"\+ Cuota compras anteriores\s+([\d.,\-]+)", text)
+        saldo_favor = parse_money(r"- Saldo a favor\s+([\d.,\-]+)", text)
+        pago_minimo = parse_money(r"= Pago m[ií]nimo\s+([\d.,\-]+)", text)
 
         return MinimumPayment(
             saldo_mora=saldo_mora,
@@ -573,8 +570,6 @@ class CreditCardExtractor:
 
     def _extract_interest_rates(self, text: str) -> InterestRates:
         """Extrae las tasas de interés."""
-        logger.debug("Extrayendo tasas de interés")
-
         def parse_rate(pattern: str, txt: str) -> tuple[float, float]:
             match = re.search(pattern, txt)
             if match:
@@ -609,31 +604,23 @@ class CreditCardExtractor:
             mora_ea=mora[1],
         )
 
-    def _extract_transactions(self, text: str) -> list[CreditCardTransaction]:
-        """Extrae las transacciones del texto."""
-        logger.debug("Extrayendo transacciones")
-
+    def _extract_transactions_from_text(self, text: str) -> list[CreditCardTransaction]:
+        """Extrae transacciones usando lógica heredada de regex."""
         transactions: list[CreditCardTransaction] = []
-
-        # Patrón para transacciones de tarjeta de crédito
-        # Formato: NumAuth Fecha Descripción ValorOrig TasaPact TasaEA CargosAbonos SaldoDif Cuotas
-        # Ejemplo: R02990 14/05/2025 UBER RIDES 8,791.00 0,0000 00,0000 8,791.00 0.00 1/1
-        # Abono:   C04028 06/05/2025 ABONO SUCURSAL VIRTUAL 100,000.00- 100,000.00- 0.00
+        parser = self._bancolombia.parser
 
         lines = text.split("\n")
 
         for line in lines:
-            # Buscar líneas que empiecen con código de autorización o fecha
-            # Código: letra + números (R02990, C04028, T05825, etc.) o solo números (000000)
             match = re.match(
-                r"^([A-Z]?\d{5,6})\s+"  # Número autorización
-                r"(\d{2}/\d{2}/\d{4})\s+"  # Fecha
-                r"(.+?)\s+"  # Descripción
-                r"([\d.,]+)-?\s+"  # Valor original (puede tener - al final)
-                r"(?:([\d,]+)\s+([\d,]+)\s+)?"  # Tasa pactada y EA (opcional)
-                r"([\d.,]+)-?\s+"  # Cargos/Abonos
-                r"([\d.,]+)\s*"  # Saldo a diferir
-                r"(?:(\d+)/(\d+))?",  # Cuotas (opcional)
+                r"^([A-Z]?\d{5,6})\s+"
+                r"(\d{2}/\d{2}/\d{4})\s+"
+                r"(.+?)\s+"
+                r"([\d.,]+)-?\s+"
+                r"(?:([\d,]+)\s+([\d,]+)\s+)?"
+                r"([\d.,]+)-?\s+"
+                r"([\d.,]+)\s*"
+                r"(?:(\d+)/(\d+))?",
                 line.strip()
             )
 
@@ -643,22 +630,18 @@ class CreditCardExtractor:
                     fecha = match.group(2)
                     descripcion = match.group(3).strip()
 
-                    valor_str = match.group(4).replace(".", "").replace(",", ".")
-                    valor_original = float(valor_str)
-                    if line.count(match.group(4) + "-") > 0:
+                    valor_original = parser.parse_to_float(match.group(4))
+                    if match.group(4) + "-" in line:
                         valor_original = -valor_original
 
                     tasa_pactada = float(match.group(5).replace(",", ".")) if match.group(5) else 0.0
                     tasa_ea = float(match.group(6).replace(",", ".")) if match.group(6) else 0.0
 
-                    cargos_str = match.group(7).replace(".", "").replace(",", ".")
-                    cargos_abonos = float(cargos_str)
-                    # Verificar si es negativo (abono)
+                    cargos_abonos = parser.parse_to_float(match.group(7))
                     if match.group(7) + "-" in line:
                         cargos_abonos = -cargos_abonos
 
-                    saldo_str = match.group(8).replace(".", "").replace(",", ".")
-                    saldo_diferir = float(saldo_str)
+                    saldo_diferir = parser.parse_to_float(match.group(8))
 
                     cuota_actual = int(match.group(9)) if match.group(9) else 0
                     cuota_total = int(match.group(10)) if match.group(10) else 0
@@ -678,39 +661,38 @@ class CreditCardExtractor:
                     transactions.append(transaction)
 
                 except (ValueError, IndexError) as e:
-                    logger.warning(f"Error parseando transacción: {e}")
+                    logger.warning(f"Error parsing transaction: {e}")  # pylint: disable=logging-fstring-interpolation
                     continue
 
-            # También buscar líneas sin número de autorización (intereses, etc.)
-            elif re.match(r"^\d{2}/\d{2}/\d{4}\s+", line.strip()):
-                match2 = re.match(
-                    r"^(\d{2}/\d{2}/\d{4})\s+"  # Fecha
-                    r"(.+?)\s+"  # Descripción
-                    r"([\d.,]+)\s+"  # Cargos/Abonos
-                    r"([\d.,]+)",  # Saldo
-                    line.strip()
-                )
-                if match2:
-                    try:
-                        fecha = match2.group(1)
-                        descripcion = match2.group(2).strip()
-                        cargos_str = match2.group(3).replace(".", "").replace(",", ".")
-                        cargos_abonos = float(cargos_str)
-                        saldo_str = match2.group(4).replace(".", "").replace(",", ".")
-                        saldo_diferir = float(saldo_str)
+        logger.debug(f"Transactions extracted: {len(transactions)}")  # pylint: disable=logging-fstring-interpolation
+        return transactions
 
-                        transaction = CreditCardTransaction(
-                            numero_autorizacion="",
-                            fecha=fecha,
-                            descripcion=descripcion,
-                            cargos_abonos=cargos_abonos,
-                            saldo_diferir=saldo_diferir,
-                        )
-                        transactions.append(transaction)
-                    except (ValueError, IndexError):
-                        continue
+    def _convert_to_credit_card_transactions(
+        self, banco_transactions: list
+    ) -> list[CreditCardTransaction]:
+        """Convierte Transaction de Bancolombia a CreditCardTransaction."""
+        transactions = []
 
-        logger.debug(f"Transacciones extraídas: {len(transactions)}")
+        for bt in banco_transactions:
+            if isinstance(bt, BancoTransaction):
+                fecha = bt.date
+                descripcion = bt.description
+                cargos_abonos = bt.amount
+                numero_auth = bt.authorization if bt.authorization else ""
+            else:
+                fecha = bt.get('date', '')
+                descripcion = bt.get('description', '')
+                cargos_abonos = bt.get('amount', 0.0)
+                numero_auth = bt.get('authorization', '')
+
+            transaction = CreditCardTransaction(
+                fecha=fecha,
+                descripcion=descripcion,
+                cargos_abonos=cargos_abonos,
+                numero_autorizacion=numero_auth,
+            )
+            transactions.append(transaction)
+
         return transactions
 
     @staticmethod

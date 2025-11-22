@@ -1,12 +1,11 @@
 """
-Extractor específico para extractos de Cuenta de Ahorros (CTA_AHORROS).
+Extractor de cuentas de ahorro que usa BancolombiaExtractor como motor.
 
-Parsea la información estructurada de los extractos bancarios
-de cuentas de ahorro de Bancolombia.
+Este extractor es un wrapper que adapta BancolombiaExtractor a la interfaz
+esperada por pdf_analyzer manteniendo compatibilidad con el sistema existente.
 """
 
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import date
 from pathlib import Path
@@ -14,7 +13,7 @@ from typing import Optional
 
 from logger import setup_logger, setup_processor_logger
 from pdf_analyzer.models import PDFDocument
-from pdf_analyzer.services.extractor_service import ExtractorService
+from pdf_analyzer.services.bancolombia_extractor import BancolombiaExtractor, Transaction as BancoTransaction
 
 logger = setup_processor_logger(setup_logger, __name__)
 
@@ -138,10 +137,10 @@ class SavingsAccountStatement:
 
 class SavingsAccountExtractor:
     """
-    Extractor especializado para extractos de Cuenta de Ahorros.
+    Extractor para cuentas de ahorro que usa BancolombiaExtractor.
 
-    Parsea extractos de Bancolombia con formato CTA_AHORROS
-    extrayendo información de cuenta, resumen y transacciones.
+    Este es un wrapper que adapta la salida de BancolombiaExtractor
+    a las clases específicas esperadas por el sistema.
     """
 
     def __init__(self, password: Optional[str] = None):
@@ -152,8 +151,8 @@ class SavingsAccountExtractor:
             password: Contraseña para PDFs protegidos.
         """
         self._password = password or get_default_password()
-        self._extractor = ExtractorService(password)
-        logger.debug("SavingsAccountExtractor inicializado")
+        self._bancolombia = BancolombiaExtractor(password=self._password)
+        logger.debug("SavingsAccountExtractor initialized (using BancolombiaExtractor)")
 
     def extract(
         self, document: PDFDocument | Path | str
@@ -168,16 +167,15 @@ class SavingsAccountExtractor:
             SavingsAccountStatement con toda la información extraída.
         """
         path = self._resolve_path(document)
-        logger.info(f"Extrayendo extracto de cuenta de ahorros: {path.name}")
+        logger.info(f"Extracting savings account statement: {path.name}")  # pylint: disable=logging-fstring-interpolation
 
-        # Obtener texto completo
-        text_by_page = self._extractor.extract_text_by_page(path)
-        full_text = "\n".join(text_by_page.values())
+        # Usa BancolombiaExtractor para la extracción
+        data = self._bancolombia.extract_text_sections(str(path))
 
-        # Extraer componentes
-        account_info = self._extract_account_info(full_text)
-        summary = self._extract_summary(full_text)
-        transactions = self._extract_transactions(full_text)
+        # Convierte a las clases esperadas
+        account_info = self._convert_account_info(data)
+        summary = self._convert_summary(data)
+        transactions = self._convert_transactions(data['transactions'])
 
         statement = SavingsAccountStatement(
             account_info=account_info,
@@ -185,9 +183,9 @@ class SavingsAccountExtractor:
             transactions=transactions,
         )
 
-        logger.info(
-            f"Extracto procesado: {len(transactions)} transacciones, "
-            f"saldo actual: {summary.saldo_actual}"
+        logger.info(  # pylint: disable=logging-fstring-interpolation
+            f"Statement processed: {len(transactions)} transactions, "
+            f"current balance: {summary.saldo_actual}"
         )
 
         return statement
@@ -195,219 +193,101 @@ class SavingsAccountExtractor:
     def extract_account_info(
         self, document: PDFDocument | Path | str
     ) -> AccountInfo:
-        """
-        Extrae solo la información de la cuenta.
-
-        Args:
-            document: Documento PDF a procesar.
-
-        Returns:
-            AccountInfo con los datos de la cuenta.
-        """
+        """Extrae solo la información de la cuenta."""
         path = self._resolve_path(document)
-        text_by_page = self._extractor.extract_text_by_page(path)
-        full_text = "\n".join(text_by_page.values())
-        return self._extract_account_info(full_text)
+        data = self._bancolombia.extract_text_sections(str(path))
+        return self._convert_account_info(data)
 
     def extract_summary(
         self, document: PDFDocument | Path | str
     ) -> FinancialSummary:
-        """
-        Extrae solo el resumen financiero.
-
-        Args:
-            document: Documento PDF a procesar.
-
-        Returns:
-            FinancialSummary con los totales del extracto.
-        """
+        """Extrae solo el resumen financiero."""
         path = self._resolve_path(document)
-        text_by_page = self._extractor.extract_text_by_page(path)
-        full_text = "\n".join(text_by_page.values())
-        return self._extract_summary(full_text)
+        data = self._bancolombia.extract_text_sections(str(path))
+        return self._convert_summary(data)
 
     def extract_transactions(
         self, document: PDFDocument | Path | str
     ) -> list[Transaction]:
-        """
-        Extrae solo las transacciones.
-
-        Args:
-            document: Documento PDF a procesar.
-
-        Returns:
-            Lista de Transaction.
-        """
+        """Extrae solo las transacciones."""
         path = self._resolve_path(document)
-        text_by_page = self._extractor.extract_text_by_page(path)
-        full_text = "\n".join(text_by_page.values())
-        return self._extract_transactions(full_text)
+        data = self._bancolombia.extract_text_sections(str(path))
+        return self._convert_transactions(data['transactions'])
 
-    def _extract_account_info(self, text: str) -> AccountInfo:
-        """Extrae información de la cuenta del texto."""
-        logger.debug("Extrayendo información de cuenta")
+    def _convert_account_info(self, data: dict) -> AccountInfo:
+        """Convierte header a AccountInfo."""
+        header = data.get('header', {})
 
-        # Periodo: DESDE: YYYY/MM/DD HASTA: YYYY/MM/DD
-        periodo_match = re.search(
-            r"DESDE:\s*(\d{4}/\d{2}/\d{2})\s*HASTA:\s*(\d{4}/\d{2}/\d{2})",
-            text
-        )
+        # Parsear fechas si están disponibles
         periodo_desde = None
         periodo_hasta = None
-        if periodo_match:
+        if 'period_start' in header and header['period_start']:
             try:
-                desde_parts = periodo_match.group(1).split("/")
-                periodo_desde = date(
-                    int(desde_parts[0]), int(desde_parts[1]), int(desde_parts[2])
-                )
-                hasta_parts = periodo_match.group(2).split("/")
-                periodo_hasta = date(
-                    int(hasta_parts[0]), int(hasta_parts[1]), int(hasta_parts[2])
-                )
+                parts = header['period_start'].split('/')
+                if len(parts) == 3:
+                    periodo_desde = date(int(parts[0]), int(parts[1]), int(parts[2]))
             except (ValueError, IndexError):
-                logger.warning("No se pudo parsear el periodo")
+                pass
 
-        # Tipo de cuenta
-        tipo_cuenta = "CUENTA DE AHORROS"
-        if "CUENTA CORRIENTE" in text:
-            tipo_cuenta = "CUENTA CORRIENTE"
-
-        # Número de cuenta: NÚMERO XXXXXXXXXXX
-        numero_match = re.search(r"N[UÚ]MERO\s+(\d+)", text)
-        numero = numero_match.group(1) if numero_match else ""
-
-        # Titular: línea después de CUENTA DE AHORROS
-        titular = ""
-        lines = text.split("\n")
-        for i, line in enumerate(lines):
-            if "CUENTA DE AHORROS" in line or "CUENTA CORRIENTE" in line:
-                if i + 1 < len(lines):
-                    titular = lines[i + 1].strip()
-                break
-
-        # Sucursal: SUCURSAL XXXX
-        sucursal_match = re.search(r"SUCURSAL\s+(.+?)(?:\n|$)", text)
-        sucursal = sucursal_match.group(1).strip() if sucursal_match else ""
-
-        # Dirección: línea después del número (si no es SUCURSAL)
-        direccion = ""
-        for i, line in enumerate(lines):
-            if numero and numero in line:
-                if i + 1 < len(lines):
-                    next_line = lines[i + 1].strip()
-                    if not next_line.startswith("SUCURSAL"):
-                        direccion = next_line
-                break
+        if 'period_end' in header and header['period_end']:
+            try:
+                parts = header['period_end'].split('/')
+                if len(parts) == 3:
+                    periodo_hasta = date(int(parts[0]), int(parts[1]), int(parts[2]))
+            except (ValueError, IndexError):
+                pass
 
         return AccountInfo(
-            titular=titular,
-            numero=numero,
-            tipo_cuenta=tipo_cuenta,
-            sucursal=sucursal,
-            direccion=direccion,
+            titular=header.get('account_holder', ''),
+            numero=header.get('account_number', ''),
+            tipo_cuenta="CUENTA DE AHORROS",
+            sucursal="",
+            direccion="",
             periodo_desde=periodo_desde,
             periodo_hasta=periodo_hasta,
         )
 
-    def _extract_summary(self, text: str) -> FinancialSummary:
-        """Extrae el resumen financiero del texto."""
-        logger.debug("Extrayendo resumen financiero")
-
-        def parse_money(pattern: str, txt: str) -> float:
-            """Parsea un valor monetario del texto."""
-            match = re.search(pattern, txt)
-            if match:
-                value_str = match.group(1)
-                # Limpiar formato: quitar puntos de miles, cambiar coma por punto
-                value_str = value_str.replace(".", "").replace(",", ".")
-                try:
-                    return float(value_str)
-                except ValueError:
-                    return 0.0
-            return 0.0
-
-        # Patrones para extraer valores
-        saldo_anterior = parse_money(
-            r"SALDO ANTERIOR\s*\$\s*([\d.,]+)", text
-        )
-        saldo_promedio = parse_money(
-            r"SALDO PROMEDIO\s*\$\s*([\d.,]+)", text
-        )
-        total_abonos = parse_money(
-            r"TOTAL ABONOS\s*\$\s*([\d.,]+)", text
-        )
-        total_cargos = parse_money(
-            r"TOTAL CARGOS\s*\$\s*([\d.,]+)", text
-        )
-        saldo_actual = parse_money(
-            r"SALDO ACTUAL\s*\$\s*([\d.,]+)", text
-        )
-        intereses = parse_money(
-            r"(?:VALOR )?INTERESES PAGADOS\s*\$\s*([\d.,]+)", text
-        )
-        cuentas_cobrar = parse_money(
-            r"CUENTAS X COBRAR\s*\$\s*([\d.,]+)", text
-        )
-        retefuente = parse_money(
-            r"RETEFUENTE\s*\$\s*([\d.,]+)", text
-        )
+    def _convert_summary(self, data: dict) -> FinancialSummary:
+        """Convierte summary a FinancialSummary."""
+        summary = data.get('summary', {})
 
         return FinancialSummary(
-            saldo_anterior=saldo_anterior,
-            saldo_promedio=saldo_promedio,
-            total_abonos=total_abonos,
-            total_cargos=total_cargos,
-            saldo_actual=saldo_actual,
-            intereses_pagados=intereses,
-            cuentas_por_cobrar=cuentas_cobrar,
-            retefuente=retefuente,
+            saldo_anterior=summary.get('previous_balance', 0.0),
+            saldo_promedio=0.0,  # No disponible en bancolombia_extractor
+            total_abonos=summary.get('total_credits', 0.0),
+            total_cargos=summary.get('total_debits', 0.0),
+            saldo_actual=summary.get('current_balance', 0.0),
+            intereses_pagados=0.0,
+            cuentas_por_cobrar=0.0,
+            retefuente=0.0,
         )
 
-    def _extract_transactions(self, text: str) -> list[Transaction]:
-        """Extrae las transacciones del texto."""
-        logger.debug("Extrayendo transacciones")
+    def _convert_transactions(self, banco_transactions: list) -> list[Transaction]:
+        """Convierte Transaction de Bancolombia a Transaction de pdf_analyzer."""
+        transactions = []
 
-        transactions: list[Transaction] = []
+        for bt in banco_transactions:
+            # bt puede ser un objeto BancoTransaction o un dict
+            if isinstance(bt, BancoTransaction):
+                fecha = bt.date
+                descripcion = bt.description
+                valor = bt.amount
+                saldo = bt.balance if bt.balance is not None else 0.0
+            else:
+                # Es un dict
+                fecha = bt.get('date', '')
+                descripcion = bt.get('description', '')
+                valor = bt.get('amount', 0.0)
+                saldo = bt.get('balance', 0.0)
 
-        # Patrón para transacciones:
-        # FECHA DESCRIPCIÓN ... VALOR SALDO
-        # Ejemplos:
-        # 29/09 PAGO DE PROV PROTECCION SA 569,576.00 569,576.00
-        # 29/09 TRANSFERENCIA A NEQUI -543,500.00 26,076.00
-        # 1/04 TRANSFERENCIA DESDE NEQUI 2,560,000.00 3,865,022.88
+            transaction = Transaction(
+                fecha=fecha,
+                descripcion=descripcion,
+                valor=valor,
+                saldo=saldo,
+            )
+            transactions.append(transaction)
 
-        # Patrón regex para capturar transacciones
-        pattern = re.compile(
-            r"^(\d{1,2}/\d{2})\s+"  # Fecha: D/MM o DD/MM
-            r"(.+?)\s+"  # Descripción
-            r"(-?[\d.,]+)\s+"  # Valor (puede ser negativo)
-            r"(-?[\d.,]+)$",  # Saldo
-            re.MULTILINE
-        )
-
-        for match in pattern.finditer(text):
-            fecha = match.group(1)
-            descripcion = match.group(2).strip()
-            valor_str = match.group(3).replace(".", "").replace(",", ".")
-            saldo_str = match.group(4).replace(".", "").replace(",", ".")
-
-            try:
-                valor = float(valor_str)
-                saldo = float(saldo_str)
-
-                transaction = Transaction(
-                    fecha=fecha,
-                    descripcion=descripcion,
-                    valor=valor,
-                    saldo=saldo,
-                )
-                transactions.append(transaction)
-
-            except ValueError as e:
-                logger.warning(f"Error parseando transacción: {e}")
-                continue
-
-        logger.debug(f"Transacciones extraídas: {len(transactions)}")
         return transactions
 
     @staticmethod
