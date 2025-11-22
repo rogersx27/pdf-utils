@@ -7,6 +7,7 @@ Uso:
     python lock_pdfs.py directorio/        # Procesa todos los PDFs en un directorio
 """
 
+import os
 import sys
 from pathlib import Path
 
@@ -70,9 +71,16 @@ def lock_all_files(input_dir: Path) -> None:
     output_dir.mkdir(exist_ok=True)
     log_info(logger, f"Directorio de salida: {output_dir}")
 
+    # Obtener contraseña del entorno
+    password = os.environ.get("PDF_PASSWORD")
+    if not password:
+        log_error(logger, "PDF_PASSWORD no está configurada en el entorno")
+        log_info(logger, "Configura la contraseña en el archivo .env")
+        return
+
     logger.info("")
 
-    results = add_password_batch(input_dir, output_dir)
+    results = add_password_batch(input_dir, output_dir, password)
 
     # Mostrar resumen
     logger.info("")
