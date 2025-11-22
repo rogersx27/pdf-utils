@@ -13,6 +13,13 @@ colorlog>=6.8.0
 # Environment
 python-dotenv>=1.0.0
 
+# REST API (FastAPI)
+fastapi>=0.115.0
+uvicorn[standard]>=0.32.0
+pydantic>=2.10.0
+pydantic-settings>=2.6.0
+python-multipart>=0.0.19
+
 # Testing
 pytest>=8.0.0
 pytest-cov>=4.1.0
