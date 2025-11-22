@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-PDF Analyzer is a Python library for analyzing bank statement PDFs (extractos bancarios). It parses PDF filenames following a specific naming convention (`Extracto_{id}_{fecha}_{tipo}_{numero}.pdf`) and provides services for reading, analyzing, and organizing PDF documents.
+PDF Analyzer is a Python library for analyzing Colombian bank statement PDFs (extractos bancarios). It parses PDF filenames following a specific naming convention (`Extracto_{id}_{fecha}_{tipo}_{numero}.pdf`) and provides services for reading, analyzing, organizing, and extracting structured data from PDF documents.
 
 ## Commands
 
@@ -24,21 +24,36 @@ pytest tests/pdf_analyzer/test_models.py
 
 # Run tests with coverage
 pytest --cov=src
+
+# Utility scripts
+python scripts/extract_with_pandas.py  # Extract data to CSV/Excel/Markdown
+python scripts/lock_pdfs.py            # Add password protection
+python scripts/unlock_pdfs.py          # Remove password protection
 ```
 
 ## Architecture
 
-The project follows a Repository pattern with layered architecture in `src/pdf_analyzer/`:
+The project follows a Repository pattern with layered architecture:
 
+### src/pdf_analyzer/
 - **models/**: Domain entities (`PDFDocument`, `PDFDocumentInfo`) - dataclasses representing PDF documents with parsed filename info (tipo, fecha, numero)
 - **repositories/**: Data access layer (`LocalPDFRepository`) - manages PDF files in the filesystem with caching
 - **services/**: Business logic
   - `ReaderService`: Text/table extraction using pypdf and pdfplumber
   - `AnalyzerService`: Analysis operations with caching (search, compare)
   - `SecurityService`: Password operations (add/remove encryption)
+  - `SavingsAccountExtractor`: Extracts savings account data (AccountInfo, FinancialSummary, Transactions)
+  - `CreditCardExtractor`: Extracts credit card data (CardInfo, CreditLimit, InterestRates, Transactions)
+  - `BancolombiaExtractor`: Core engine for Bancolombia-specific PDF parsing
 - **file_manager/**: File operations (`FileOperations`, `PDFOrganizer`, `PDFRegistry`) - copy/move/rename, organize by type/year, export inventories
 
-The `src/logger/` package provides a logging system with date-based file handlers, colored console output, and pretty formatting functions.
+### src/data_processor/
+Pandas-based processors for converting extracted data to DataFrames with validation and multi-format export:
+- `SavingsAccountProcessor`: Process savings account statements
+- `CreditCardProcessor`: Process credit card statements (multi-currency support)
+
+### src/logger/
+Logging system with date-based file handlers, colored console output, and pretty formatting functions.
 
 ## Key Conventions
 
@@ -47,6 +62,7 @@ The `src/logger/` package provides a logging system with date-based file handler
 - All services accept optional `password` parameter for encrypted PDFs
 - Environment variable `PDF_PASSWORD` sets default password for services
 - Logging levels configurable via env vars: `LOG_LEVEL`, `LOG_LEVEL_CLI`, `LOG_LEVEL_PROCESSORS`, etc.
+- Number parsing supports dual formats: US (`1,234.56`) and Colombian (`1.234,56`) - auto-detected by `NumberParser`
 
 ## Imports
 
@@ -58,9 +74,24 @@ from pdf_analyzer import (
     FileOperations, PDFOrganizer, PDFRegistry,
 )
 
+# Data extractors
+from pdf_analyzer.services import SavingsAccountExtractor, CreditCardExtractor
+
 # Convenience functions
 from pdf_analyzer import list_pdfs, extract_text, analyze, search_in_pdf
+
+# Data processors
+from data_processor import SavingsAccountProcessor, CreditCardProcessor
 
 # Logging
 from logger import setup_logger, setup_cli_logger
 ```
+
+## Testing
+
+Test fixtures available in `conftest.py`:
+- `temp_dir`: Temporary directory for test files
+- `sample_pdf_path`: Single test PDF file
+- `sample_pdf_files`: Multiple test PDF files
+- `mock_pdfplumber`, `mock_pypdf_reader`: Mocked PDF readers
+- `env_password`: PDF_PASSWORD environment fixture
