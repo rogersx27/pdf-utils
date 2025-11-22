@@ -21,7 +21,7 @@ import sys
 from pathlib import Path
 
 # Configure sys.path once for all services
-_project_root = Path(__file__).parent.parent.parent.parent  # EXTRACTOS/
+_project_root = Path(__file__).parent.parent.parent.parent.parent  # EXTRACTOS/
 _src_path = _project_root / "src"
 
 if str(_src_path) not in sys.path:

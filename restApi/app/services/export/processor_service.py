@@ -17,8 +17,24 @@ from app.schemas.file_operations import (
     ValidationResultSchema,
 )
 
-from app.services.concerns import ExportableService
-from app.services.setup_imports import (
+from app.services.base import ExportableService
+from app.services.base.constants import (
+    EXPORT_FORMAT_CSV,
+    EXPORT_FORMAT_EXCEL,
+    EXPORT_EXTENSIONS,
+    ERROR_MSG_NO_TRANSACTIONS,
+    MSG_DATA_EXPORTED,
+    KEY_TRANSACCIONES,
+    KEY_VALIDACION,
+    KEY_PESOS,
+    KEY_DOLARES,
+    SHEET_TRANSACCIONES,
+    SHEET_RESUMEN,
+    SHEET_CUENTA,
+    SHEET_TARJETA,
+    SHEET_CUPO,
+)
+from app.services.base.imports import (
     SavingsAccountProcessor,
     CreditCardProcessor,
 )
@@ -74,14 +90,14 @@ class DataProcessorService(ExportableService):
             data = self.savings_processor.process(str(pdf_path), validate=False)
 
             # Validate transactions exist
-            transactions_df = data.get('transacciones')
+            transactions_df = data.get(KEY_TRANSACCIONES)
             if transactions_df is None or transactions_df.empty:
-                raise InternalServerError("No transactions found in PDF")
+                raise InternalServerError(ERROR_MSG_NO_TRANSACTIONS)
 
             record_count = len(transactions_df)
 
             # Generate output path
-            extension = ".xlsx" if export_format == "excel" else ".csv"
+            extension = EXPORT_EXTENSIONS.get(export_format, EXPORT_EXTENSIONS[EXPORT_FORMAT_EXCEL])
             output_path = self._generate_output_path(
                 pdf_path,
                 output_filename,
@@ -98,7 +114,7 @@ class DataProcessorService(ExportableService):
                 format=export_format,
                 record_count=record_count,
                 sheets=sheets,
-                message=f"Data exported successfully to {output_path.name}"
+                message=MSG_DATA_EXPORTED.format(filename=output_path.name)
             )
 
     def export_credit_card(
@@ -130,7 +146,7 @@ class DataProcessorService(ExportableService):
             # Count transactions
             record_count = self._count_credit_card_transactions(data)
             if record_count == 0:
-                raise InternalServerError("No transactions found in PDF")
+                raise InternalServerError(ERROR_MSG_NO_TRANSACTIONS)
 
             # Generate output path
             output_path, output_display = self._get_credit_card_output_path(
@@ -149,7 +165,7 @@ class DataProcessorService(ExportableService):
                 format=export_format,
                 record_count=record_count,
                 sheets=sheets,
-                message="Data exported successfully"
+                message=MSG_DATA_EXPORTED.format(filename=output_display)
             )
 
     def validate_savings_data(
@@ -172,8 +188,8 @@ class DataProcessorService(ExportableService):
         with self._map_exceptions("validate savings data"):
             data = self.savings_processor.process(str(pdf_path), validate=True)
 
-            validation = data.get('validacion')
-            record_count = len(data.get('transacciones', []))
+            validation = data.get(KEY_VALIDACION)
+            record_count = len(data.get(KEY_TRANSACCIONES, []))
 
             return self._validation_to_schema(validation, record_count)
 
@@ -213,10 +229,10 @@ class DataProcessorService(ExportableService):
     def _count_credit_card_transactions(self, data: dict) -> int:
         """Count total transactions from both currencies."""
         count = 0
-        if data.get('pesos') and data['pesos'].get('transacciones') is not None:
-            count += len(data['pesos']['transacciones'])
-        if data.get('dolares') and data['dolares'].get('transacciones') is not None:
-            count += len(data['dolares']['transacciones'])
+        if data.get(KEY_PESOS) and data[KEY_PESOS].get(KEY_TRANSACCIONES) is not None:
+            count += len(data[KEY_PESOS][KEY_TRANSACCIONES])
+        if data.get(KEY_DOLARES) and data[KEY_DOLARES].get(KEY_TRANSACCIONES) is not None:
+            count += len(data[KEY_DOLARES][KEY_TRANSACCIONES])
         return count
 
     def _export_savings(
@@ -226,15 +242,15 @@ class DataProcessorService(ExportableService):
         export_format: str
     ) -> Optional[list[str]]:
         """Export savings data and return sheet names."""
-        if export_format == "excel":
+        if export_format == EXPORT_FORMAT_EXCEL:
             self.savings_processor.export_to_excel(data, output_path)
-            return ["Transacciones", "Resumen", "Información"]
-        elif export_format == "csv":
+            return [SHEET_TRANSACCIONES, SHEET_RESUMEN, SHEET_CUENTA]
+        elif export_format == EXPORT_FORMAT_CSV:
             self.savings_processor.export_to_csv(data, output_path)
             return None
         else:
             raise InternalServerError(
-                f"Format '{export_format}' not supported. Use 'csv' or 'excel'"
+                f"Format '{export_format}' not supported. Use '{EXPORT_FORMAT_CSV}' or '{EXPORT_FORMAT_EXCEL}'"
             )
 
     def _export_credit_card(
@@ -244,19 +260,19 @@ class DataProcessorService(ExportableService):
         export_format: str
     ) -> Optional[list[str]]:
         """Export credit card data and return sheet names."""
-        if export_format == "excel":
+        if export_format == EXPORT_FORMAT_EXCEL:
             self.credit_processor.export_to_excel(data, output_path)
             return [
-                "Información", "Cupos",
-                "Transacciones Pesos", "Resumen Pesos",
-                "Transacciones Dólares", "Resumen Dólares"
+                SHEET_TARJETA, SHEET_CUPO,
+                f"{SHEET_TRANSACCIONES} Pesos", f"{SHEET_RESUMEN} Pesos",
+                f"{SHEET_TRANSACCIONES} Dólares", f"{SHEET_RESUMEN} Dólares"
             ]
-        elif export_format == "csv":
+        elif export_format == EXPORT_FORMAT_CSV:
             self.credit_processor.export_to_csv(data, output_path)
             return None
         else:
             raise InternalServerError(
-                f"Format '{export_format}' not supported. Use 'csv' or 'excel'"
+                f"Format '{export_format}' not supported. Use '{EXPORT_FORMAT_CSV}' or '{EXPORT_FORMAT_EXCEL}'"
             )
 
     def _get_credit_card_output_path(
@@ -277,11 +293,12 @@ class DataProcessorService(ExportableService):
             return output_path, str(output_path)
 
         base_name = pdf_path.stem
-        if export_format == "csv":
+        if export_format == EXPORT_FORMAT_CSV:
             output_path = output_dir / base_name
             return output_path, f"{output_path}/ (multiple CSV files)"
         else:
-            output_path = output_dir / f"{base_name}.xlsx"
+            extension = EXPORT_EXTENSIONS.get(export_format, EXPORT_EXTENSIONS[EXPORT_FORMAT_EXCEL])
+            output_path = output_dir / f"{base_name}{extension}"
             return output_path, str(output_path)
 
     def _validation_to_schema(

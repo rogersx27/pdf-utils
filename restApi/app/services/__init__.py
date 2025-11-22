@@ -7,19 +7,26 @@ with the core pdf_analyzer and data_processor modules from src/.
 Architecture:
     API Layer (FastAPI) -> Services -> pdf_analyzer / data_processor
 
+Structure:
+    services/
+    ├── base/           # Infrastructure (concerns, constants, imports)
+    ├── pdf/            # PDF analysis service
+    ├── files/          # File management service
+    └── export/         # Data export service
+
 Services use a concerns-based architecture for code reuse:
     - BaseService: Path validation + Password handling + Exception mapping
     - ExportableService: BaseService + Output directory management
 """
 
-# Services
-from .pdf_analyzer_service import PDFAnalyzerService
-from .file_manager_service import FileManagerService
-from .data_processor_service import DataProcessorService
+# Services (main exports)
+from .pdf import PDFAnalyzerService
+from .files import FileManagerService
+from .export import DataProcessorService
 
-# Concerns (Mixins) for extending services
-from .concerns import (
-    # Individual mixins
+# Base infrastructure (for extending services)
+from .base import (
+    # Mixins
     PathResolvableMixin,
     PasswordAwareMixin,
     ExceptionMapperMixin,
@@ -30,6 +37,8 @@ from .concerns import (
     # Decorators
     with_path_validation,
     with_exception_mapping,
+    # Constants module
+    constants,
 )
 
 __all__ = [
@@ -37,14 +46,14 @@ __all__ = [
     "PDFAnalyzerService",
     "FileManagerService",
     "DataProcessorService",
-    # Concerns
+    # Base infrastructure
     "PathResolvableMixin",
     "PasswordAwareMixin",
     "ExceptionMapperMixin",
     "OutputDirectoryMixin",
     "BaseService",
     "ExportableService",
-    # Decorators
     "with_path_validation",
     "with_exception_mapping",
+    "constants",
 ]

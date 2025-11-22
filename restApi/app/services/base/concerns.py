@@ -30,6 +30,13 @@ from app.core.exceptions import (
     PDFParsingError,
     InternalServerError,
 )
+from app.services.base.constants import (
+    DIR_DATA_EXTRACTED,
+    ERROR_KEYWORD_PASSWORD,
+    ERROR_KEYWORD_ENCRYPTED,
+    ERROR_MSG_FAILED_TO,
+    EXT_EXCEL,
+)
 
 T = TypeVar('T')
 
@@ -196,9 +203,9 @@ class ExceptionMapperMixin:
             raise
         except Exception as e:
             error_msg = str(e).lower()
-            if "password" in error_msg or "encrypted" in error_msg:
+            if ERROR_KEYWORD_PASSWORD in error_msg or ERROR_KEYWORD_ENCRYPTED in error_msg:
                 raise PDFPasswordError(str(e)) from e
-            raise error_class(f"Failed to {operation}: {str(e)}") from e
+            raise error_class(ERROR_MSG_FAILED_TO.format(operation=operation, error=str(e))) from e
 
     def _handle_exception(
         self,
@@ -219,9 +226,9 @@ class ExceptionMapperMixin:
             error_class: For other exceptions
         """
         error_msg = str(exception).lower()
-        if "password" in error_msg or "encrypted" in error_msg:
+        if ERROR_KEYWORD_PASSWORD in error_msg or ERROR_KEYWORD_ENCRYPTED in error_msg:
             raise PDFPasswordError(str(exception)) from exception
-        raise error_class(f"Failed to {operation}: {str(exception)}") from exception
+        raise error_class(ERROR_MSG_FAILED_TO.format(operation=operation, error=str(exception))) from exception
 
 
 # =============================================================================
@@ -236,7 +243,7 @@ class OutputDirectoryMixin:
     generating output paths for export operations.
     """
 
-    def _get_output_dir(self, subdir: str = "data-extracted") -> Path:
+    def _get_output_dir(self, subdir: str = DIR_DATA_EXTRACTED) -> Path:
         """
         Get or create output directory.
 
@@ -254,7 +261,7 @@ class OutputDirectoryMixin:
         self,
         source_path: Path,
         output_filename: Optional[str] = None,
-        extension: str = ".xlsx",
+        extension: str = EXT_EXCEL,
         output_dir: Optional[Path] = None
     ) -> Path:
         """

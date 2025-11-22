@@ -21,8 +21,43 @@ from app.schemas.file_operations import (
     PDFRegistryEntrySchema,
 )
 
-from app.services.concerns import BaseService
-from app.services.setup_imports import (
+from app.services.base import BaseService
+from app.services.base.constants import (
+    OPERATION_COPY,
+    OPERATION_MOVE,
+    OPERATION_RENAME,
+    OPERATION_DELETE,
+    ORGANIZATION_BY_TYPE,
+    ORGANIZATION_BY_YEAR,
+    MSG_FILE_COPIED,
+    MSG_FILE_MOVED,
+    MSG_FILE_RENAMED,
+    MSG_FILE_DELETED,
+    KEY_SIZE_BYTES,
+    KEY_SIZE_MB,
+    KEY_CREATED_AT,
+    KEY_MODIFIED_AT,
+    KEY_IS_ENCRYPTED,
+    KEY_PAGE_COUNT,
+    KEY_TOTAL_FILES,
+    KEY_TOTAL_SIZE_MB,
+    KEY_ENCRYPTED_COUNT,
+    KEY_DOCUMENT_TYPES,
+    KEY_ENTRIES,
+    KEY_FILENAME,
+    KEY_DOCUMENT_ID,
+    KEY_DATE,
+    KEY_TYPE,
+    KEY_ACCOUNT_NUMBER,
+    KEY_FILE_SIZE_MB,
+    KEY_FILES_PROCESSED,
+    KEY_FILES_MOVED,
+    KEY_FOLDERS_CREATED,
+    KEY_ERRORS,
+    KEY_SUMMARY,
+    EXT_PDF,
+)
+from app.services.base.imports import (
     copy_pdf,
     move_pdf,
     rename_pdf,
@@ -77,10 +112,10 @@ class FileManagerService(BaseService):
 
             return FileOperationResponse(
                 success=True,
-                operation="copy",
+                operation=OPERATION_COPY,
                 source=str(source_path),
                 destination=str(result_path),
-                message=f"File copied successfully to {Path(result_path).name}"
+                message=MSG_FILE_COPIED.format(filename=Path(result_path).name)
             )
 
     def move_file(
@@ -112,10 +147,10 @@ class FileManagerService(BaseService):
 
             return FileOperationResponse(
                 success=True,
-                operation="move",
+                operation=OPERATION_MOVE,
                 source=str(source_path),
                 destination=str(result_path),
-                message=f"File moved successfully to {Path(result_path).name}"
+                message=MSG_FILE_MOVED.format(filename=Path(result_path).name)
             )
 
     def rename_file(self, source: str, new_name: str) -> FileOperationResponse:
@@ -139,10 +174,10 @@ class FileManagerService(BaseService):
 
             return FileOperationResponse(
                 success=True,
-                operation="rename",
+                operation=OPERATION_RENAME,
                 source=str(source_path),
                 destination=str(result_path),
-                message=f"File renamed successfully to {new_name}"
+                message=MSG_FILE_RENAMED.format(filename=new_name)
             )
 
     def delete_file(self, source: str) -> FileOperationResponse:
@@ -162,10 +197,10 @@ class FileManagerService(BaseService):
 
             return FileOperationResponse(
                 success=True,
-                operation="delete",
+                operation=OPERATION_DELETE,
                 source=str(source_path),
                 destination=None,
-                message="File deleted successfully"
+                message=MSG_FILE_DELETED
             )
 
     def get_file_info(self, filename: str) -> FileInfoSchema:
@@ -186,11 +221,11 @@ class FileManagerService(BaseService):
             return FileInfoSchema(
                 filename=filename,
                 path=str(file_path),
-                size_bytes=info['size_bytes'],
-                size_mb=info['size_mb'],
-                created_at=info.get('created_at'),
-                modified_at=info.get('modified_at'),
-                is_encrypted=info.get('is_encrypted'),
+                size_bytes=info[KEY_SIZE_BYTES],
+                size_mb=info[KEY_SIZE_MB],
+                created_at=info.get(KEY_CREATED_AT),
+                modified_at=info.get(KEY_MODIFIED_AT),
+                is_encrypted=info.get(KEY_IS_ENCRYPTED),
                 is_valid=True
             )
 
@@ -207,7 +242,7 @@ class FileManagerService(BaseService):
         path = Path(folder_path) if folder_path else settings.data_dir
 
         with self._map_exceptions("get folder info"):
-            pdf_files = list(path.glob("*.pdf"))
+            pdf_files = list(path.glob(f"*{EXT_PDF}"))
             total_size = sum(f.stat().st_size for f in pdf_files if f.exists())
 
             return FolderInfoSchema(
@@ -242,7 +277,7 @@ class FileManagerService(BaseService):
                 copy=copy
             )
 
-            return self._organization_result_to_schema(result, "by_type")
+            return self._organization_result_to_schema(result, ORGANIZATION_BY_TYPE)
 
     def organize_by_year(
         self,
@@ -268,7 +303,7 @@ class FileManagerService(BaseService):
                 copy=copy
             )
 
-            return self._organization_result_to_schema(result, "by_year")
+            return self._organization_result_to_schema(result, ORGANIZATION_BY_YEAR)
 
     def get_registry(self) -> PDFRegistrySchema:
         """
@@ -282,23 +317,23 @@ class FileManagerService(BaseService):
 
             entries = [
                 PDFRegistryEntrySchema(
-                    filename=entry['filename'],
-                    document_id=entry['document_id'],
-                    date=entry['date'],
-                    type=entry['type'],
-                    account_number=entry['account_number'],
-                    file_size_mb=entry['file_size_mb'],
-                    is_encrypted=entry['is_encrypted'],
-                    page_count=entry.get('page_count')
+                    filename=entry[KEY_FILENAME],
+                    document_id=entry[KEY_DOCUMENT_ID],
+                    date=entry[KEY_DATE],
+                    type=entry[KEY_TYPE],
+                    account_number=entry[KEY_ACCOUNT_NUMBER],
+                    file_size_mb=entry[KEY_FILE_SIZE_MB],
+                    is_encrypted=entry[KEY_IS_ENCRYPTED],
+                    page_count=entry.get(KEY_PAGE_COUNT)
                 )
-                for entry in inventory.get('entries', [])
+                for entry in inventory.get(KEY_ENTRIES, [])
             ]
 
             return PDFRegistrySchema(
-                total_files=inventory.get('total_files', 0),
-                total_size_mb=inventory.get('total_size_mb', 0.0),
-                encrypted_count=inventory.get('encrypted_count', 0),
-                document_types=inventory.get('document_types', {}),
+                total_files=inventory.get(KEY_TOTAL_FILES, 0),
+                total_size_mb=inventory.get(KEY_TOTAL_SIZE_MB, 0.0),
+                encrypted_count=inventory.get(KEY_ENCRYPTED_COUNT, 0),
+                document_types=inventory.get(KEY_DOCUMENT_TYPES, {}),
                 entries=entries
             )
 
@@ -314,9 +349,9 @@ class FileManagerService(BaseService):
         """Convert organization result to API schema."""
         return OrganizationResultSchema(
             operation=operation,
-            files_processed=result.get('files_processed', 0),
-            files_moved=result.get('files_moved', 0),
-            folders_created=result.get('folders_created', 0),
-            errors=result.get('errors', []),
-            summary=result.get('summary', {})
+            files_processed=result.get(KEY_FILES_PROCESSED, 0),
+            files_moved=result.get(KEY_FILES_MOVED, 0),
+            folders_created=result.get(KEY_FOLDERS_CREATED, 0),
+            errors=result.get(KEY_ERRORS, []),
+            summary=result.get(KEY_SUMMARY, {})
         )
